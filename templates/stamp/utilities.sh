@@ -422,7 +422,13 @@ get_machine_role()
 
 print_script_header()
 {
-    SCRIPT_NAME=`basename "$0"`
+    scriptname_override=$1;
+
+    if [ -z $scriptname_override ]; then
+        SCRIPT_NAME=`basename "$0"`
+    else
+        SCRIPT_NAME=$scriptname_override
+    fi
 
     log "-"
     log "#############################################"
