@@ -7,11 +7,16 @@
 # This script rotates the SSH key for the OXA STAMP OS Admin User.
 #
 
+set -x
+
 # initialize required parameters
 encoded_parameters=""
 target_user=""
 private_key=""
 public_key=""
+
+#############################################################################
+# parse the command line arguments
 
 parse_args() 
 {
@@ -30,11 +35,8 @@ parse_args()
         echo "Option '${1}' set with value '"${arg_value}"'"
 
         case "$1" in
-          --parameters)
-            parameters=`echo ${arg_value} | base64 --decode`
-            ;;
           --target-user)
-            target_user=`echo ${arg_value} | base64 --decode`
+            target_user="${arg_value}"
             ;;
           --private-key)
             private_key=`echo ${arg_value} | base64 --decode`
