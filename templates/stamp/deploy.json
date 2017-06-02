@@ -43,7 +43,7 @@
             "type": "string",
             "defaultValue": "",
             "metadata": {
-                "description": "A string representing parameter name & value pairs that will be used by the upgrade script."
+                "description": "A string representing parameter name & value pairs that will be used by the upgrade script. This string needs to be Base64-encoded."
             }
         }
     },
@@ -59,7 +59,7 @@
         "installerScript": "install.sh",
         "relativeUtilitiesScriptPath": "templates/stamp/utilities.sh",
 
-        "installerCommand": "[concat('bash ', variables('installerScript'), ' --parameters ', base64(parameters('upgradeParameters')),  '  >> /var/log/bootstrap.csx.log 2>&1')]",
+        "installerCommand": "[concat('bash ', variables('installerScript'), ' ', base64ToString(parameters('upgradeParameters')),  '  >> /var/log/bootstrap.csx.log 2>&1')]",
 
         "monitoringAgentInstallerFiles": {
             "scriptsToDownload": [
