@@ -79,25 +79,26 @@ source $utilities_path
 print_script_header "RotateAdminSshKey Installer"
 
 # pass existing command line arguments
-parse_args $@ 
-
-# check if $parameters has been set. If not, bail out
-if [ -z "$parameters" == "" ];
-then
-    log "Parameters not specified and is required"
-    exit 3
-fi
-
-# process the decoded parameters
-parse_args $parameters
+parse_args $@
 
 # update the public/private key
-echo $private_key > "/home/${target_user}/.ssh/id_rsa"
-echo $public_key  > "/home/${target-user}/.ssh/id_rsa.pub"
+private_key_path="/home/${target_user}/.ssh/id_rsa"
+public_key_path="/home/${target_user}/.ssh/id_rsa.pub"
 
-# set the permissions on the public/private key
-chmod 600 "/home/${target_user}/.ssh/id_rsa"
-chmod 644 "/home/${target-user}/.ssh/id_rsa.pub"
+# Create public/private Keys
+echo $public_key  > $public_key_path
+exit_on_error "Unable to write public key data to ${public_key_path}"
 
-echo "Entering Installer for 'mysqlfscleanup'"
-touch /var/log/csx.upgrade.log
+echo $private_key > $private_key_path
+exit_on_error "Unable to write private key data to ${private_key_path}"
+
+
+# Setup permissions for public/private key
+chmod 644 $public_key_path
+exit_on_error "Unable set permissions for public key at ${public_key_path}"
+
+chmod 600 $private_key_path
+exit_on_error "Unable set permissions for private key at ${public_key_path}"
+
+
+echo "Completed Key Rotation for ${target_user}"
