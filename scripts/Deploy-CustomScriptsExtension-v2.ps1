@@ -65,7 +65,7 @@ Param(
         [Parameter(Mandatory=$false)][string]$OxaToolsGithubBranch="oxa/master.fic",
 
         [Parameter(Mandatory=$false)][string]$InstallerPackageName,
-        [Parameter(Mandatory=$false)][string]$UpgradeParameters="",
+        [Parameter(Mandatory=$false)][array]$UpgradeParameters="",
 
         [Parameter(Mandatory=$false)][switch]$Upgrade
      )
@@ -75,6 +75,7 @@ Param(
 # ENTRY POINT
 #################################
 
+# Import library
 $invocation = (Get-Variable MyInvocation).Value 
 $currentPath = Split-Path $invocation.MyCommand.Path 
 Import-Module "$($currentPath)/Common.ps1" -Force
@@ -90,14 +91,17 @@ if ($Upgrade -eq $false)
 {
     $jobs = @()
 
-    # get all VMs
-    Log-Message "Getting all VMs in the '$ResourceGroupName' resource group";
-    $vms = Get-AzureRmVM -ResourceGroupName $ResourceGroupName -Verbose
-
+    # get the Jumpbox VM
+    Log-Message "Getting the Jumpbox VM in the '$ResourceGroupName' resource group";
+    $vms = Get-AzureRmVM -ResourceGroupName $ResourceGroupName -Verbose | Where-Object { $_.Name.Contains("-jb") }
 
     # iterate each VM and remove any existing custom scription extension
+    [array]$targetedVm = @()
+
     foreach($vm in $vms)
     {
+        $targetedVm += $vm.Name;
+
         foreach($extension in $vm.Extensions)
         {
             # TODO: run this within a job to speed up the removal
@@ -131,6 +135,7 @@ if ($Upgrade -eq $false)
     until ( $runningJobs.Count -eq 0);
 
     # clean up
+    Log-Message "Completed removal of existing Custom Script Extension for $($targetedVm.join(","))"
     Get-Job | Receive-Job
 }
 else
@@ -139,6 +144,53 @@ else
 }
 
 #prep the variables we want to use for replacement
+# upgradeParameters is expected to be an array of hashtables where each hashtable has 
+# the following keys: name, value, valueType (optional: defaults to string) and their accompanying values
+# the only supported valueTypes are: string (default) and FilePath
+# for FilePath valueType, the path will be tested, content read and base64 encoded before being passed as the parameter value
+[array]$upgradeParameterList = @()
+foreach($parameter in $upgradeParameters)
+{
+    [hashtable]$parameterHashtable = $parameter
+    # parameter is expected to be a hashtable with the following keys: name, value (optional: defaults to blank), valueType (optional: defaults to string)
+    if ($parameterHashtable.ContainsKey("name") -eq $false)
+    {
+        throw "'$($parameter)' is invalid. It is expected to be a hashtable with the following keys: name, value (optional: defaults to blank), valueType (optional: defaults to string)"
+    }
+
+    if ($parameterHashtable.ContainsKey("valueType") -and $parameterHashtable["valueType"] -ieq "File")
+    {
+        # we have a filetype specified. Make sure the "value" is present & that it points to a file
+        if ($parameterHashtable.ContainsKey("value") -eq $false)
+        {
+            throw "No value specified for the FileType parameter: '$($parameterHashtable["name"])'"
+        }
+
+        # test the file path
+        if ((Test-Path -Path ($parameterHashtable["value"])) -eq $false )
+        {
+            throw "The file specified '$($parameterHashtable["value"])' doesn't exist!"
+        }
+
+        # get the file content and base64 encode it
+        $fileContent = gc -Path $parameterHashtable["value"]
+        $fileContentBytes = [System.Text.Encoding]::UTF8.GetBytes($fileContent)
+        $parameterValue = [Convert]::ToBase64String($fileContentBytes)
+    }
+    else
+    {
+        # treat value as string
+        $parameterValue=$parameterHashtable["value"]
+    }
+
+    # append the parameter to the list
+    $upgradeParameterList += "--$($parameterHashtable["name"]) ""$($parameterValue)"""
+}
+
+# prepare the upgrade parameters for handling in the scripts
+$upgradeParameterListBytes = [System.Text.Encoding]::UTF8.GetBytes($upgradeParameterList -join " ")
+$upgradeParameterListEncoded = [Convert]::ToBase64String($upgradeParameterListBytes)
+
 $replacements = @{
                     "ClusterName"=$ResourceGroupName; 
                     "ClusterAdmininistratorEmailAddress"=$ClusterAdmininistratorEmailAddress;
@@ -146,7 +198,7 @@ $replacements = @{
                     "OxaToolsGithubProjectName"=$OxaToolsGithubProjectName;
                     "OxaToolsGithubBranch"=$OxaToolsGithubBranch;
                     "InstallerPackageName"=$InstallerPackageName;
-                    "UpgradeParameters"=$UpgradeParameters;
+                    "UpgradeParameters"=$upgradeParameterListEncoded;
                 }
 
 $tempParametersFile = Update-RuntimeParameters -ParametersFile $TemplateParameterFile -ReplacementHash $replacements;
@@ -156,4 +208,3 @@ New-AzureRmResourceGroupDeployment -ResourceGroupName $ResourceGroupName -Templa
 
 # Log-Message "Temp file: $tempParametersFile"
 Remove-Item $tempParametersFile
-
