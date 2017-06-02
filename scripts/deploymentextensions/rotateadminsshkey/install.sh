@@ -75,30 +75,23 @@ fi
 # source the utilities now
 source $utilities_path
 
-# Script self-idenfitication
+# Script self-identification
 print_script_header "RotateAdminSshKey Installer"
 
 # pass existing command line arguments
 parse_args $@
 
-# update the public/private key
-private_key_path="/home/${target_user}/.ssh/id_rsa"
-public_key_path="/home/${target_user}/.ssh/id_rsa.pub"
+# only add the new public key as the only authorized key for the specific user
+authorized_keys_path="/home/${target_user}/.ssh/authorized_keys"
 
-# Create public/private Keys
-echo $public_key  > $public_key_path
-exit_on_error "Unable to write public key data to ${public_key_path}"
-
-echo $private_key > $private_key_path
-exit_on_error "Unable to write private key data to ${private_key_path}"
-
+echo $public_key > $authorized_keys_path
+exit_on_error "Unable to add specified public key as the authorized key for ${target_user}:  ${authorized_keys_path}"
 
 # Setup permissions for public/private key
-chmod 644 $public_key_path
-exit_on_error "Unable set permissions for public key at ${public_key_path}"
+chmod 600 $authorized_keys_path
+exit_on_error "Unable set permissions for the authorized keys file at ${authorized_keys_path}"
 
-chmod 600 $private_key_path
-exit_on_error "Unable set permissions for private key at ${public_key_path}"
-
+# TODO: add support for a deep clean mode where we update the actual public/private keys for the JB and all other servers within the cluster
+# To do this, make sure the sequence is respected: update the authorized key for other servers first, and update the public/private key for the jumpbox
 
 echo "Completed Key Rotation for ${target_user}"
