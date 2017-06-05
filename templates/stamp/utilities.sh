@@ -1030,7 +1030,7 @@ restart_mysql()
     start_mysql
 }
 
-move_mysql_datadirectory
+move_mysql_datadirectory()
 {
     # track the input parameters
     new_datadirectory_path=$1
