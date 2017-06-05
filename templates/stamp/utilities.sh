@@ -1120,7 +1120,7 @@ move_mysql_datadirectory()
 #############################################################################
 # Wrapper function for doing role-based tools installation
 #############################################################################
-install-tools
+install-tools()
 {
     machine_role=$(get_machine_role)
 
