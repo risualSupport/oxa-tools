@@ -63,6 +63,7 @@ Param(
         [Parameter(Mandatory=$false)][string]$OxaToolsGithubAccountName="Microsoft",
         [Parameter(Mandatory=$false)][string]$OxaToolsGithubProjectName="oxa-tools",
         [Parameter(Mandatory=$false)][string]$OxaToolsGithubBranch="oxa/master.fic",
+        [Parameter(Mandatory=$false)][string]$OxaToolsGithubBranchTag="",
 
         [Parameter(Mandatory=$false)][string]$InstallerPackageName,
         [Parameter(Mandatory=$false)][array]$UpgradeParameters="",
@@ -187,6 +188,12 @@ foreach($parameter in $upgradeParameters)
     $upgradeParameterList += "--$($parameterHashtable["name"]) ""$($parameterValue)"""
 }
 
+# add the oxa-tools repository parameters to the list as well to expose these values to the underlying script
+$upgradeParameterList += "--oxatools-public-github-accountname ""$($OxaToolsGithubAccountName)"""
+$upgradeParameterList += "--oxatools-public-github-projectname ""$($OxaToolsGithubProjectName)"""
+$upgradeParameterList += "--oxatools-public-github-projectbranch ""$($OxaToolsGithubBranch)"""
+$upgradeParameterList += "--oxatools-public-github-branchtag ""$($OxaToolsGithubBranchTag)"""
+
 # prepare the upgrade parameters for handling in the scripts
 $upgradeParameterListBytes = [System.Text.Encoding]::UTF8.GetBytes($upgradeParameterList -join " ")
 $upgradeParameterListEncoded = [Convert]::ToBase64String($upgradeParameterListBytes)
@@ -197,6 +204,7 @@ $replacements = @{
                     "OxaToolsGithubAccountName"=$OxaToolsGithubAccountName;
                     "OxaToolsGithubProjectName"=$OxaToolsGithubProjectName;
                     "OxaToolsGithubBranch"=$OxaToolsGithubBranch;
+                    "OxaToolsGithubBranchTag"=$OxaToolsGithubBranchTag;
                     "InstallerPackageName"=$InstallerPackageName;
                     "UpgradeParameters"=$upgradeParameterListEncoded;
                 }

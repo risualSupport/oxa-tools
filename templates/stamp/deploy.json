@@ -33,6 +33,13 @@
                 "description": "Branch of the oxa-tools GitHub repository"
             }
         },
+        "oxaToolsGithubBranchTag": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Tag within the branch to checkout"
+            }
+        },
         "installerPackageName": {
             "type": "string",
             "metadata": {
@@ -59,7 +66,8 @@
         "installerScript": "install.sh",
         "relativeUtilitiesScriptPath": "templates/stamp/utilities.sh",
 
-        "installerCommand": "[concat('bash ', variables('installerScript'), ' ', base64ToString(parameters('upgradeParameters')),  '  >> /var/log/bootstrap.csx.log 2>&1')]",
+        "oxaToolsGitHubRepositoryParameters": "[concat(' --oxatools-public-github-accountname ', parameters('oxaToolsGithubAccountName'), ' --oxatools-public-github-projectname ', parameters('oxaToolsGithubProjectName'), ' --oxatools-public-github-projectbranch ', parameters('oxaToolsGithubBranch'), ' --oxatools-public-github-branchtag ', parameters('oxaToolsGithubBranchTag') )]",
+        "installerCommand": "[concat('bash ', variables('installerScript'), variables('oxaToolsGitHubRepositoryParameters'), ' ', base64ToString(parameters('upgradeParameters')),  '  >> /var/log/bootstrap.csx.log 2>&1')]",
 
         "monitoringAgentInstallerFiles": {
             "scriptsToDownload": [

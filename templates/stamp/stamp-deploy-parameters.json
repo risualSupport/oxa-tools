@@ -16,12 +16,15 @@
         },
         "oxaToolsGithubBranch": {
             "value": "{oxaToolsGithubBranch}"
-        },		
+        },
+        "oxaToolsGithubBranchTag": {
+            "value": "{oxaToolsGithubBranchTag}"
+        },
         "installerPackageName": {
             "value": "{installerPackageName}"
         },
         "upgradeParameters": {
             "value": "{upgradeParameters}"
         },
-	}
+    }
 }
