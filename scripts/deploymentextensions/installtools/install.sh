@@ -9,12 +9,6 @@
 
 set -x
 
-# initialize required parameters
-encoded_parameters=""
-target_user=""
-private_key=""
-public_key=""
-
 # Oxa Tools
 # Settings for the OXA-Tools public repository 
 oxa_tools_public_github_account="Microsoft"
