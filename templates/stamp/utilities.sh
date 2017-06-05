@@ -18,6 +18,7 @@ ERROR_AZURECLI_FAILED=6201
 ERROR_AZURECLI_SCRIPT_DOWNLOAD_FAILED=6202
 ERROR_AZURECLI2_INSTALLATION_FAILED=6203
 ERROR_AZURECLI_INVALID_OSVERSION=6204
+ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED=7001
 
 #############################################################################
 # Log a message
@@ -349,31 +350,31 @@ get_github_url()
 clone_repository()
 {
     # Required params
-    ACCOUNT_NAME=$1; PROJECT_NAME=$2; BRANCH=$3
+    account_name=$1; project_name=$2; branch=$3
 
     # Optional args
-    ACCESS_TOKEN=$4; REPO_PATH=$5
+    access_token=$4; repo_path=$5; repo_tag=$6
 
     # Validate parameters
-    if [ -z $ACCOUNT_NAME ] || [ -z $PROJECT_NAME ] || [ -z $BRANCH ] ;
+    if [ -z $account_name ] || [ -z $project_name ] || [ -z $branch ] ;
     then
         log "You must specify the GitHub account name, project name and branch " "ERROR"
         exit 3
     fi
 
     # If repository path is not specified then use home directory
-    if [ -z $REPO_PATH ]
+    if [ -z $repo_path ]
     then
-        REPO_PATH=~/$PROJECT_NAME
+        repo_path=~/$project_name
     fi 
 
     # Clean up any residue of the repository. (scorch)
-    clean_repository $REPO_PATH
+    clean_repository $repo_path
 
     #todo: We don't provide the token here because sync_repo() will try adding it again. See todo in sync_repo().
-    REPO_URL=`get_github_url "$ACCOUNT_NAME" "$PROJECT_NAME"`
+    repo_url=`get_github_url "$account_name" "$project_name"`
 
-    sync_repo $REPO_URL $BRANCH $REPO_PATH $ACCESS_TOKEN
+    sync_repo $repo_url $branch $repo_path $access_token $repo_tag
 }
 
 #############################################################################
@@ -443,29 +444,41 @@ print_script_header()
 
 sync_repo()
 {
-    REPO_URL=$1; REPO_VERSION=$2; REPO_PATH=$3
-    REPO_TOKEN=$4 # optional
+    repo_url=$1; repo_version=$2; repo_path=$3
+    repo_token=$4 # optional
+    repo_tag=$5   # optional
 
     if [ "$#" -lt 3 ]; then
         echo "sync_repo: invalid number of arguments" && exit 1
     fi
   
-    if [[ ! -d $REPO_PATH ]]; then
-        sudo mkdir -p $REPO_PATH
-        # todo: we should prevent adding REPO_TOKEN more than once. One option is to use get_github_url()
+    if [[ ! -d $repo_path ]]; then
+        sudo mkdir -p $repo_path
+        # todo: we should prevent adding repo_token more than once. One option is to use get_github_url()
         #   to create the url "just-in-time" instead of taking a url as a parameter.
-        sudo git clone --recursive ${REPO_URL/github/$REPO_TOKEN@github} $REPO_PATH
-        exit_on_error "Failed cloning repository $REPO_URL to $REPO_PATH"
+        sudo git clone --recursive ${repo_url/github/$repo_token@github} $repo_path
+        exit_on_error "Failed cloning repository $repo_url to $repo_path"
     else
-        pushd $REPO_PATH
+        pushd $repo_path
+        sudo git fetch --all --tags --prune
+        exit_on_error "Failed fetching all repository tags for $repo_path"
+
         sudo git pull --all
-        exit_on_error "Failed syncing repository $REPO_URL to $REPO_PATH"
+        exit_on_error "Failed syncing repository $repo_url to $repo_path"
         popd
     fi
 
-    pushd $REPO_PATH
-    sudo git checkout ${REPO_VERSION:-master}
-    exit_on_error "Failed checking out branch $REPO_VERSION from repository $REPO_URL in $REPO_PATH"
+    pushd $repo_path
+
+    # checkout latest (or up to tag if specified)
+    if [ -z $repo_tag ];
+    then
+        sudo git checkout ${repo_version:-master}
+    else
+        sudo git checkout "tags/${repo_tag}" -b ${repo_version:-master}
+    fi
+
+    exit_on_error "Failed checking out branch $repo_version from repository $repo_url in $repo_path"
     popd
 }
 
@@ -948,4 +961,188 @@ set_timezone()
 
     log "Setting the timezone for '${HOSTNAME}' to '${timezone}'"
     timedatectl set-timezone $timezone
+}
+
+#############################################################################
+# Install HA Proxy
+#############################################################################
+
+install-haproxy()
+{
+    if type haproxy >/dev/null 2>&1; then
+        log "HA Proxy is already installed"
+    else
+        log "Installing HA Proxy"
+
+        log "Updating Repository"
+        apt-get update
+
+        apt-get install -y haproxy
+        exit_on_error "Failed to install the HAProxy ${HOSTNAME} !" $ERROR_GITINSTALL_FAILED
+    fi
+
+    log "HAProxy installed"
+}
+
+
+#############################################################################
+# Mysql Utilities
+#############################################################################
+
+start_mysql()
+{
+    log "Starting Mysql Server"
+
+    if (( $(echo "$OS_VER > 16" | bc -l) ))
+    then
+        systemctl start mysqld
+        # enable mysqld on startup
+        systemctl enable mysqld
+    else
+        service mysql start
+    fi
+
+    # Wait for Mysql daemon to start and initialize for the first time (this may take up to a minute or so)
+    while ! timeout 1 bash -c "echo > /dev/tcp/localhost/$MYSQL_PORT"; do sleep 10; done
+
+    log "${MYSQL_SERVER_PACKAGE_NAME} has been started"
+}
+
+stop_mysql()
+{
+    # Find out what PID the Mysql instance is running as (if any)
+    MYSQLPID=`ps -ef | grep '/usr/sbin/mysqld' | grep -v grep | awk '{print $2}'`
+    
+    if [ ! -z "$MYSQLPID" ]; then
+        log "Stopping Mysql Server (PID $MYSQLPID)"
+        
+        kill -15 $MYSQLPID
+
+        # Important not to attempt to start the daemon immediately after it was stopped as unclean shutdown may be wrongly perceived
+        sleep 15s
+    fi
+}
+
+# restart mysql server (stop and start)
+restart_mysql()
+{
+    stop_mysql
+    start_mysql
+}
+
+move_mysql_datadirectory
+{
+    # track the input parameters
+    new_datadirectory_path=$1
+    admin_email_address=$2
+
+    # database credentials
+    mysql_adminuser_name=$3
+    mysql_adminuser_password=$4
+    mysql_server_ip=$5
+
+    # subject for email notification
+    subject="Operation: Moving Mysql Data Directory"
+
+    # get the current data directory (as the server sees it)
+    current_datadirectory_path=`mysql -u ${mysql_adminuser_name} -p${mysql_adminuser_password} -N -h ${mysql_server_ip} -e "select @@datadir;"`
+    exit_on_error "Could not query the mysql server at on '${mysql_adminuser_name}@${mysql_server_ip}' to determine its current data directory!" ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+
+    # make sure we have a valid data directory
+    if [ -z $current_datadirectory_path ] || [ -d $current_datadirectory_path ];
+    then
+        raise error "Could not determine the current data directory for '${mysql_adminuser_name}@${mysql_server_ip}'! Current value is: ${current_datadirectory_path}."
+    fi
+
+    # 1. Stop the server
+    # It is assumed that the server is already running as a slave vs a master node
+    stop_mysql
+    exit_on_error "Could not stop mysql on '${HOSTNAME}'!" ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+
+    # 2. Copy the server data to the new location and move the server data to backup
+    # The expectation is that the parent directory exists at the target path.
+    rsync -av $current_datadirectory_path $new_datadirectory_path
+    exit_on_error "Failed copying server data from '${current_datadirectory_path}' to '${new_datadirectory_path}' on '${HOSTNAME}' !" ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+
+    # Backup the current data directory
+    datadirectory_backup_path="${current_datadirectory_path}-backup"
+    mv $current_datadirectory_path $datadirectory_backup_path
+    exit_on_error "Could not backup the data directory from '${current_datadirectory_path}' to '${$datadirectory_backup_path}' on '${HOSTNAME}' !" ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+
+    # 3. Update mysql configuration to reference the new path
+    # locate the main configuration file
+    mysql_configuration_file="/etc/mysql/my.cnf"
+    
+    if [ $(echo "$PACKAGE_VERSION == 5.7" | bc -l)  ];
+    then
+            mysql_configuration_file="/etc/mysql/conf.d/mysqld.cnf"
+    fi
+
+    # update the data directory path
+    sed -i "s/^datadir=.*/datadir=${new_datadirectory_path}/I" $mysql_configuration_file
+
+    #4. Configure Apparmor
+    # Instead of using symlink (which has been problematic), we will leverage apparmor to handle the aliasing of the data directory path
+    
+    # Check if there is a reference to the new path already established. If there isn't any reference, append a new line to the apparmor configs
+    apparmor_config_file="/etc/apparmor.d/tunables/alias"
+    alias="alias ${current_datadirectory_path} -> ${new_datadirectory_path}, "
+    alias_regex="^alias ${current_datadirectory_path} ->.*"
+
+    if [ grep -Gxq $alias_regex "${apparmor_config_file}" ];
+    then
+        # Existing Alias: Override it
+        sed -i "s/${alias_regex}/${alias}/I" $apparmor_config_file
+    else
+        # Alias doesn't exist: Append It
+        cat "${alias}" >> $apparmor_config_file
+    fi
+
+    # restart apparmor to apply the settings
+    if (( $(echo "$OS_VER > 16" | bc -l) ))
+    then
+        systemctl restart apparmor
+    else
+        service apparmor restart
+    fi
+
+    # check for errors
+    exit_on_error "Could not start apparmor after adding the data directory alias on '${HOSTNAME}' !" ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+
+    # setup blank reference for mysql database directory to circumvent any startup check failures
+    mkdir "${current_datadirectory_path}/mysql" -p
+
+    #5. Restart the server
+    start_mysql
+    exit_on_error "Could not start mysql server after moving its data directory on '${HOSTNAME}' !" ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+}
+
+#############################################################################
+# Wrapper function for doing role-based tools installation
+#############################################################################
+install-tools
+{
+    machine_role=$(get_machine_role)
+
+    # 1. Setup Tools
+    install-git
+    install-gettext # required for envsubst command
+    set_timezone
+
+    if [ "$machine_role" == "jumpbox" ] || [ "$machine_role" == "vmss" ];
+    then
+        install-bc
+        install-mongodb-shell
+        install-mysql-client
+
+        install-powershell
+        install-azure-cli
+        install-azure-cli-2
+
+        if [ "$machine_role" == "jumpbox" ]; 
+        then
+            log "Installing Mysql Utilities on Jumpbox ${HOSTNAME}"
+            install-mysql-utilities
+        fi
+    fi
 }
