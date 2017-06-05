@@ -7,8 +7,6 @@
 # This script installs various tools for the Jumpbox & VMSS instances.
 #
 
-set -x
-
 # Oxa Tools
 # Settings for the OXA-Tools public repository 
 oxa_tools_public_github_account="Microsoft"
