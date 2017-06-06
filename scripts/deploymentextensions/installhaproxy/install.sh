@@ -29,11 +29,15 @@ mysql_slave2_server_ip=""
 mysql_server_list=""
 mysql_server_port="3306"
 
+mysql_admin_username=""
+mysql_admin_password=""
+
 # haproxy settings
 haproxy_port="3308"
 haproxy_username="haproxy_check"
 haproxy_initscript="/etc/default/haproxy"
 haproxy_configuration_file="/etc/haproxy/haproxy.cfg"
+haproxy_configuration_template_file="${oxa_tools_repository_path}/scripts/deploymentextensions/installhaproxy/haproxy.template.cfg"
 
 # Email Notifications
 notification_email_subject="Move Mysql Data Directory"
@@ -83,6 +87,12 @@ parse_args()
           --mysql-server-port)
             mysql_server_port="${arg_value}"
             ;;
+          --mysql-admin-username)
+            mysql_admin_username="${arg_value}"
+            ;;
+          --mysql-admin-password)
+            mysql_admin_password="${arg_value}"
+            ;;
           --haproxy-server-port)
             haproxy_port="${arg_value}"
             ;;
@@ -121,7 +131,7 @@ fi
 source $utilities_path
 
 # Script self-identification
-print_script_header "Tools Installer"
+print_script_header "HA Proxy Installer"
 
 # pass existing command line arguments
 parse_args $@
@@ -141,22 +151,23 @@ mysql_slave1_server_ip=${mysql_server_list[1]}
 mysql_slave2_server_ip=${mysql_server_list[2]}
 
 # 1. Create the HA Proxy Mysql account on the master mysql server
-mysql -u ${mysql_admin_username} -p${mysql_admin_password} -h ${mysql_master_server_ip} -e "INSERT INTO mysql.user (Host,User) values ('${target_server}','${haproxy_username}'); FLUSH PRIVILEGES;"
+mysql -u ${mysql_admin_username} -p${mysql_admin_password} -h ${mysql_master_server_ip} -e "INSERT INTO mysql.user (Host,User) values ('${target_server}','${haproxy_username}') ON DUPLICATE KEY UPDATE Host='${target_server}', User='${haproxy_username}'; FLUSH PRIVILEGES;"
 exit_on_error "Unable to create HA Proxy Mysql account on '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
 # Validate user access
-database_list = `mysql -u ${haproxy_username} -N -h ${mysql_master_server_ip} -e "SHOW DATABASES"`
+database_list=`mysql -u ${haproxy_username} -N -h ${mysql_master_server_ip} -e "SHOW DATABASES"`
 exit_on_error "Unable to access the target server using ${haproxy_username}@${mysql_master_server_ip} without password from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
 # 2. Install HA Proxy
-install-haproxy
+stop_haproxy
+install_haproxy
 
 # 3. Configure HA Proxy
 
 # 3.1 Enable HA Proxy to be initialized from startup script
 enabled_regex="^ENABLED=.*"
 
-if [ grep -Gxq $alias_regex $haproxy_initscript ];
+if grep -Gxq $enabled_regex $haproxy_initscript;
 then
     # Existing Alias: Override it
     sed -i "s/${enabled_regex}/ENABLED=1/I" $haproxy_initscript
@@ -166,21 +177,35 @@ else
 fi
 
 # 3.2 Update the HA Proxy configuration
-mv "${haproxy_configuration_file}"{,.bak}
-cp "${oxa_tools_repository_path}/scripts/deploymentextensions/movemysqldatadirectory/haproxy.template.cfg" "${haproxy_configuration_file}"
+if [ -f "${haproxy_configuration_file}" ];
+then
+    mv "${haproxy_configuration_file}"{,.bak}
+    exit_on_error "Unable to backup the HA Proxy configuration file at ${haproxy_configuration_file} !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
+fi
 
-sed -i "s/{${HAProxyPort}}/${haproxy_port}/I" "${haproxy_configuration_file}"
-sed -i "s/{${MysqlServerPort}}/${mysql_server_port}/I" "${haproxy_configuration_file}"
-sed -i "s/{${MysqlMasterServerIP}}/${mysql_master_server_ip}/I" "${haproxy_configuration_file}"
-sed -i "s/{${MysqlSlave1ServerIP}}/${mysql_slave1_server_ip}/I" "${haproxy_configuration_file}"
-sed -i "s/{${MysqlSlave2ServerIP}}/${mysql_slave2_server_ip}/I" "${haproxy_configuration_file}"
+cp  "${haproxy_configuration_template_file}" "${haproxy_configuration_file}"
+exit_on_error "Unable to copy the HA Proxy configuration template from  the target server using ${haproxy_username}@${mysql_master_server_ip} without password from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
+
+set -x
+log "Replacing template variables"
+sed -i "s/{HAProxyPort}/${haproxy_port}/I" "${haproxy_configuration_file}"
+sed -i "s/{MysqlServerPort}/${mysql_server_port}/I" "${haproxy_configuration_file}"
+sed -i "s/{MysqlMasterServerIP}/${mysql_master_server_ip}/I" "${haproxy_configuration_file}"
+sed -i "s/{MysqlSlave1ServerIP}/${mysql_slave1_server_ip}/I" "${haproxy_configuration_file}"
+sed -i "s/{MysqlSlave2ServerIP}/${mysql_slave2_server_ip}/I" "${haproxy_configuration_file}"
 
 # 3.3 Start HA Proxy
-start-haproxy
+start_haproxy
 exit_on_error "Unable to start HA Proxy on '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
 # 3.4 Final validation
-mysql -u ${mysql_admin_username} -p${mysql_admin_password} -h ${mysql_master_server_ip} -P ${haproxy_port} -e "SHOW DATABASES;"
+database_list=`mysql -u ${mysql_admin_username} -p${mysql_admin_password} -h ${mysql_master_server_ip} -P ${haproxy_port} -e "SHOW DATABASES;"`
+exit_on_error "Unable to access the target server using ${mysql_admin_username}@${mysql_master_server_ip} from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
+if [[ -z "${database_list// }" ]];
+then    
+    log "The database list returned is empty: '${database_list}'"
+    exit $ERROR_HAPROXY_INSTALLER_FAILED
+fi
 
-echo "Completed Key Rotation for ${target_user}"
+log "Completed HA Proxy installation ${target_user}"

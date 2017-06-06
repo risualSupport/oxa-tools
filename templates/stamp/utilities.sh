@@ -425,7 +425,7 @@ print_script_header()
 {
     scriptname_override=$1;
 
-    if [ -z $scriptname_override ]; then
+    if [[ -z $scriptname_override ]]; then
         SCRIPT_NAME=`basename "$0"`
     else
         SCRIPT_NAME=$scriptname_override
@@ -472,9 +472,9 @@ sync_repo()
     # checkout latest (or up to tag if specified)
     if [ -z $repo_tag ];
     then
-        sudo git checkout ${repo_version:-master}
+        sudo git checkout "${repo_version:-master}"
     else
-        sudo git checkout "tags/${repo_tag}" -b ${repo_version:-master}
+        sudo git checkout "tags/${repo_tag}" "${repo_version:-master}"
     fi
 
     exit_on_error "Failed checking out branch $repo_version from repository $repo_url in $repo_path"
@@ -735,7 +735,7 @@ install-json-processor()
 }
 
 #############################################################################
-# Install GIT client
+# Install Mailer
 #############################################################################
 
 install-mailer()
@@ -966,7 +966,7 @@ set_timezone()
 # Install HA Proxy
 #############################################################################
 
-install-haproxy()
+install_haproxy()
 {
     if type haproxy >/dev/null 2>&1; then
         log "HA Proxy is already installed"
@@ -981,6 +981,33 @@ install-haproxy()
     fi
 
     log "HAProxy installed"
+}
+
+start_haproxy()
+{
+    log "Starting HA Proxy Server"
+
+    service haproxy start
+
+    # Important - wait for the service to startup and interact with mysql
+    sleep 15s
+
+    log "HA Proxy has been started"
+}
+
+stop_haproxy()
+{
+    # Find out what PID(s) the HaProxy instance is running as (if any)
+    haproxy_pid=`ps -ef | grep 'haproxy' | grep -v grep | awk '{print $2}'`
+    
+    if [ ! -z "$haproxy_pid" ]; then
+        log "Stopping HA Proxy Server (PID $haproxy_pid)"
+        
+        service haproxy stop
+
+        # Important not to attempt to start the daemon immediately after it was stopped as unclean shutdown may be wrongly perceived
+        sleep 15s
+    fi
 }
 
 
