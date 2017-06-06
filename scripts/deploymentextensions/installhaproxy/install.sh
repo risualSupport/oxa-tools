@@ -39,6 +39,9 @@ haproxy_initscript="/etc/default/haproxy"
 haproxy_configuration_file="/etc/haproxy/haproxy.cfg"
 haproxy_configuration_template_file="${oxa_tools_repository_path}/scripts/deploymentextensions/installhaproxy/haproxy.template.cfg"
 
+# operation mode: 0=local, 1=remote via ssh
+remote_mode=0
+
 # Email Notifications
 notification_email_subject="Move Mysql Data Directory"
 admin_email_address=""
@@ -99,6 +102,9 @@ parse_args()
           --mysql-server-list)
             mysql_server_list=(`echo ${arg_value} | base64 --decode`)
             ;;
+          --remote)
+            remote_mode=1
+            ;;
         esac
 
         shift # past argument or value
@@ -136,14 +142,38 @@ print_script_header "HA Proxy Installer"
 # pass existing command line arguments
 parse_args $@
 
+# sync the oxa-tools repository
+repo_url=`get_github_url "$oxa_tools_public_github_account" "$oxa_tools_public_github_projectname"`
+sync_repo $repo_url $oxa_tools_public_github_projectbranch $oxa_tools_repository_path $access_token $oxa_tools_public_github_branchtag
+
+# execute the installer remote
+if [[ $remote == 0 ]];
+then
+    # at this point, we are on the jumpbox attempting to execute the installer on the remote target 
+
+    # copy the installer & the utilities files to the target server & ssh/execute the Operations
+    scp ./install.sh "${target_server}":~/
+    exit_on_error "Unable to copy installer script to '${target_server}' from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
+
+    scp ./utilities.sh "${target_server}":~/
+    exit_on_error "Unable to copy utilities to '${target_server}' from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
+
+    # build the command for remote execution
+    $encoded_server_list=`echo ${mysql_server_list} | base64`
+    remote_command="sudo bash ~/install.sh --oxatools-public-github-accountname $oxa_tools_public_github_account --oxatools-public-github-projectname $oxa_tools_public_github_projectname --oxatools-public-github-projectbranch $oxa_tools_public_github_projectbranch --oxatools-public-github-branchtag $oxa_tools_public_github_branchtag --oxatools-repository-path $oxa_tools_repository_path --admin-email-address $admin_email_address --target-server $target_server --mysql-server-port $mysql_server_port --mysql-admin-username $mysql_admin_username --mysql-admin-password $mysql_admin_password --haproxy-server-port $haproxy_port --mysql-server-list $encoded_server_list --remote"
+
+    # run the remote command
+    ssh "${target_server}":~/ $remote_command
+    exit_on_error "Could not execute the installer on the remote target: ${target_server} from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
+
+    log "Completed Remote execution successfully"
+    exit
+fi
+
 #############################################
 # Main Operations
 # this should run on the target server
 #############################################
-
-# sync the oxa-tools repository
-repo_url=`get_github_url "$oxa_tools_public_github_account" "$oxa_tools_public_github_projectname"`
-sync_repo $repo_url $oxa_tools_public_github_projectbranch $oxa_tools_repository_path $access_token $oxa_tools_public_github_branchtag
 
 # setup the server references
 mysql_master_server_ip=${mysql_server_list[0]}
