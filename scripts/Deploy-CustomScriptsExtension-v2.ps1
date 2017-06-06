@@ -66,7 +66,7 @@ Param(
         [Parameter(Mandatory=$false)][string]$OxaToolsGithubBranchTag="",
 
         [Parameter(Mandatory=$false)][string]$InstallerPackageName,
-        [Parameter(Mandatory=$false)][array]$UpgradeParameters="",
+        [Parameter(Mandatory=$false)][array]$UpgradeParameters=@(),
 
         [Parameter(Mandatory=$false)][switch]$Upgrade
      )
@@ -97,11 +97,11 @@ if ($Upgrade -eq $false)
     $vms = Get-AzureRmVM -ResourceGroupName $ResourceGroupName -Verbose | Where-Object { $_.Name.Contains("-jb") }
 
     # iterate each VM and remove any existing custom scription extension
-    [array]$targetedVm = @()
+    [array]$targetedVms = @()
 
     foreach($vm in $vms)
     {
-        $targetedVm += $vm.Name;
+        $targetedVms += $vm.Name;
 
         foreach($extension in $vm.Extensions)
         {
@@ -136,7 +136,8 @@ if ($Upgrade -eq $false)
     until ( $runningJobs.Count -eq 0);
 
     # clean up
-    Log-Message "Completed removal of existing Custom Script Extension for $($targetedVm.join(","))"
+
+    Log-Message "Completed removal of existing Custom Script Extension for $($targetedVms -join(","))"
     Get-Job | Receive-Job
 }
 else

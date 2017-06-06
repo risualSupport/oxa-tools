@@ -90,8 +90,11 @@ parse_args $@
 # sync the oxa-tools repository
 repo_url=`get_github_url "$oxa_tools_public_github_account" "$oxa_tools_public_github_projectname"`
 sync_repo $repo_url $oxa_tools_public_github_projectbranch $oxa_tools_repository_path $access_token $oxa_tools_public_github_branchtag
-	
-# run the installation
+
+####################################
+# Main Operations
+####################################
+
 install-tools
 
 echo "Completed tools installation for ${HOSTNAME}"
