@@ -348,7 +348,7 @@ tune_system
 install-bc
 install_mysql_server
 create_config_file
-restart_mysql
+restart_mysql $MYSQL_PORT
 
 # Step 4 - Configurations
 secure_mysql_installation

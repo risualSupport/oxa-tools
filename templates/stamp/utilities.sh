@@ -1019,9 +1019,16 @@ start_mysql()
 {
     log "Starting Mysql Server"
 
-    if (( $(echo "$OS_VER > 16" | bc -l) ))
+    # the server port: default to 3306
+    mysql_port=${1:-3306}
+
+    # track the OS version
+    os_version=$(lsb_release -rs)
+
+    if (( $(echo "$os_version > 16" | bc -l) ))
     then
         systemctl start mysqld
+
         # enable mysqld on startup
         systemctl enable mysqld
     else
@@ -1029,9 +1036,9 @@ start_mysql()
     fi
 
     # Wait for Mysql daemon to start and initialize for the first time (this may take up to a minute or so)
-    while ! timeout 1 bash -c "echo > /dev/tcp/localhost/$MYSQL_PORT"; do sleep 10; done
+    while ! timeout 1 bash -c "echo > /dev/tcp/localhost/$mysql_port"; do sleep 10; done
 
-    log "${MYSQL_SERVER_PACKAGE_NAME} has been started"
+    log "Mysql server has been started"
 }
 
 stop_mysql()
@@ -1053,7 +1060,7 @@ stop_mysql()
 restart_mysql()
 {
     stop_mysql
-    start_mysql
+    start_mysql ${1:-3306}
 }
 
 #############################################################################
@@ -1062,14 +1069,17 @@ restart_mysql()
 
 move_mysql_datadirectory()
 {
+    ###################################
+    # 0. Pre-requisites
     # track the input parameters
     new_datadirectory_path=$1
     admin_email_address=$2
 
-    # database credentials
+    # database credentials & version
     mysql_adminuser_name=$3
     mysql_adminuser_password=$4
     mysql_server_ip=$5
+    mysql_package_version=$6
 
     # subject for email notification
     subject="Operation: Moving Mysql Data Directory"
@@ -1078,58 +1088,75 @@ move_mysql_datadirectory()
     current_datadirectory_path=`mysql -u ${mysql_adminuser_name} -p${mysql_adminuser_password} -N -h ${mysql_server_ip} -e "select @@datadir;"`
     exit_on_error "Could not query the mysql server at on '${mysql_adminuser_name}@${mysql_server_ip}' to determine its current data directory!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
 
+    # remove trailing slash (if present)
+    current_datadirectory_path=${current_datadirectory_path%/}
+
     # make sure we have a valid data directory
-    if [ -z $current_datadirectory_path ] || [ -d $current_datadirectory_path ];
+    if [ -z $current_datadirectory_path ] || [ ! -d $current_datadirectory_path ];
     then
-        raise error "Could not determine the current data directory for '${mysql_adminuser_name}@${mysql_server_ip}'! Current value is: ${current_datadirectory_path}."
+        log "Could not determine the current data directory for '${mysql_adminuser_name}@${mysql_server_ip}'! Current value is: ${current_datadirectory_path}."
+        exit $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED
     fi
 
+    ###################################
     # 1. Stop the server
     # It is assumed that the server is already running as a slave vs a master node
     stop_mysql
     exit_on_error "Could not stop mysql on '${HOSTNAME}'!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
 
+    ###################################
     # 2. Copy the server data to the new location and move the server data to backup
     # The expectation is that the parent directory exists at the target path.
+    log "Copying the data directory from '${current_datadirectory_path}' to '${new_datadirectory_path}'"
     rsync -av $current_datadirectory_path $new_datadirectory_path
     exit_on_error "Failed copying server data from '${current_datadirectory_path}' to '${new_datadirectory_path}' on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
 
     # Backup the current data directory
     datadirectory_backup_path="${current_datadirectory_path}-backup"
-    mv $current_datadirectory_path $datadirectory_backup_path
-    exit_on_error "Could not backup the data directory from '${current_datadirectory_path}' to '${$datadirectory_backup_path}' on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+    log "Backing up the data directory from '${current_datadirectory_path}' to '${datadirectory_backup_path}'"
 
+    mv $current_datadirectory_path $datadirectory_backup_path
+    exit_on_error "Could not backup the data directory from '${current_datadirectory_path}' to '${datadirectory_backup_path}' on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+
+    ###################################
     # 3. Update mysql configuration to reference the new path
     # locate the main configuration file
-    mysql_configuration_file="/etc/mysql/my.cnf"
-    
-    if [ $(echo "$PACKAGE_VERSION == 5.7" | bc -l)  ];
-    then
-            mysql_configuration_file="/etc/mysql/conf.d/mysqld.cnf"
-    fi
+    mysql_configuration_file="/etc/mysql/conf.d/mysqld.cnf"
 
     # update the data directory path
-    sed -i "s/^datadir=.*/datadir=${new_datadirectory_path}/I" $mysql_configuration_file
+    log "Updating Mysql Configuration at ${mysql_configuration_file} : setting datadir=${new_datadirectory_path}"
+    if [[ ! -f $mysql_configuration_file ]]; 
+    then
+        echo "The calculated Mysql Configuration file isn't available!"
+        exit $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED
+    fi
 
+    sed -i "s#^datadir=.*#datadir=${new_datadirectory_path}#I" $mysql_configuration_file
+    exit_on_error "Could not update the Mysql Configuration file at '${mysql_configuration_file}'!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+
+    ###################################
     #4. Configure Apparmor
     # Instead of using symlink (which has been problematic), we will leverage apparmor to handle the aliasing of the data directory path
-    
+
     # Check if there is a reference to the new path already established. If there isn't any reference, append a new line to the apparmor configs
     apparmor_config_file="/etc/apparmor.d/tunables/alias"
     alias="alias ${current_datadirectory_path} -> ${new_datadirectory_path}, "
     alias_regex="^alias ${current_datadirectory_path} ->.*"
 
-    if [ grep -Gxq $alias_regex "${apparmor_config_file}" ];
+    if [ `grep -Gxq "${alias_regex}" "${apparmor_config_file}"` ];
     then
         # Existing Alias: Override it
-        sed -i "s/${alias_regex}/${alias}/I" $apparmor_config_file
+        log "Existing alias detected in ${apparmor_config_file}. Overriding with new value: ${alias}"
+        sed -i "s~${alias_regex}~${alias}~I" $apparmor_config_file
     else
         # Alias doesn't exist: Append It
-        cat "${alias}" >> $apparmor_config_file
+        log "Adding new alias to ${apparmor_config_file}"
+        echo "${alias}" >> $apparmor_config_file
     fi
 
     # restart apparmor to apply the settings
-    if (( $(echo "$OS_VER > 16" | bc -l) ))
+    os_version=$(lsb_release -rs)
+    if (( $(echo "$os_version > 16" | bc -l) ))
     then
         systemctl restart apparmor
     else
@@ -1142,6 +1169,7 @@ move_mysql_datadirectory()
     # setup blank reference for mysql database directory to circumvent any startup check failures
     mkdir "${current_datadirectory_path}/mysql" -p
 
+    ###################################
     #5. Restart the server
     start_mysql
     exit_on_error "Could not start mysql server after moving its data directory on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
