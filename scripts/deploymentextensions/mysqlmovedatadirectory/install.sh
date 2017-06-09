@@ -136,19 +136,19 @@ then
     # at this point, we are on the jumpbox attempting to execute the installer on the remote target 
 
     # copy the installer & the utilities files to the target server & ssh/execute the Operations
-    scp ./install.sh "${target_server}":~/
+    scp ./install.sh "${target_server_ip}":~/
     exit_on_error "Unable to copy installer script to '${target_server}' from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
-    scp ./utilities.sh "${target_server}":~/
+    scp ./utilities.sh "${target_server_ip}":~/
     exit_on_error "Unable to copy utilities to '${target_server}' from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
     # build the command for remote execution
     $encoded_server_list=`echo ${mysql_server_list} | base64`
-    remote_command="sudo bash ~/install.sh --oxatools-public-github-accountname $oxa_tools_public_github_account --oxatools-public-github-projectname $oxa_tools_public_github_projectname --oxatools-public-github-projectbranch $oxa_tools_public_github_projectbranch --oxatools-public-github-branchtag $oxa_tools_public_github_branchtag --oxatools-repository-path $oxa_tools_repository_path --admin-email-address $admin_email_address --target-server $target_server --mysql-server-port $mysql_server_port --mysql-admin-username $mysql_admin_username --mysql-admin-password $mysql_admin_password --haproxy-server-port $haproxy_port --mysql-server-list $encoded_server_list --remote"
+    remote_command="sudo bash ~/install.sh --oxatools-public-github-accountname $oxa_tools_public_github_account --oxatools-public-github-projectname $oxa_tools_public_github_projectname --oxatools-public-github-projectbranch $oxa_tools_public_github_projectbranch --oxatools-public-github-branchtag $oxa_tools_public_github_branchtag --oxatools-repository-path $oxa_tools_repository_path --admin-email-address $admin_email_address --target-datadirectory-path $target_datadirectory_path --mysql-server-port $mysql_server_port --mysql-admin-username $mysql_admin_username --mysql-admin-password $mysql_admin_password --target-server-ip $target_server_ip  --remote"
 
     # run the remote command
-    ssh "${target_server}":~/ $remote_command
-    exit_on_error "Could not execute the installer on the remote target: ${target_server} from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
+    ssh "${target_server_ip}":~/ $remote_command
+    exit_on_error "Could not execute the installer on the remote target: ${target_server_ip} from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
     log "Completed Remote execution successfully"
     exit
