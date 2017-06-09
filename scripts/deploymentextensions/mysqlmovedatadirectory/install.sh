@@ -17,6 +17,9 @@ oxa_tools_repository_path="/oxa/oxa-tools"
 
 # Initialize required parameters
 
+# admin user for OS
+os_admin_user=""
+
 # the server being re-configured
 target_server_ip=""
 mysql_server_port="3306"
@@ -85,6 +88,9 @@ parse_args()
             ;;
           --target-server-ip)
             target_server_ip="${arg_value}"
+            ;;
+          --os-admin-user)
+            os_admin_user="${arg_value}"
             ;;
           --remote)
             remote_mode=1
