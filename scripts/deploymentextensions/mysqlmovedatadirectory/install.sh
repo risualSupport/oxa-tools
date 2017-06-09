@@ -131,7 +131,7 @@ repo_url=`get_github_url "$oxa_tools_public_github_account" "$oxa_tools_public_g
 sync_repo $repo_url $oxa_tools_public_github_projectbranch $oxa_tools_repository_path $access_token $oxa_tools_public_github_branchtag
 
 # execute the installer remote
-if [[ $remote == 0 ]];
+if [[ $remote_mode == 0 ]];
 then
     # at this point, we are on the jumpbox attempting to execute the installer on the remote target 
 
