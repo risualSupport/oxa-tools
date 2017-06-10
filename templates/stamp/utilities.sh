@@ -1022,13 +1022,10 @@ start_mysql()
     # the server port: default to 3306
     mysql_port=${1:-3306}
 
-    # support cases requiring service restart despite the OS version
-    force_services_restart=${1:-0}
-
     # track the OS version
     os_version=$(lsb_release -rs)
 
-    if [[ $(echo "$os_version > 16" | bc -l) ]] && [[ $force_services_restart == 0]]
+    if [[ $(echo "$os_version > 16" | bc -l) ]]
     then
         systemctl start mysqld
 
@@ -1147,6 +1144,11 @@ move_mysql_datadirectory()
     sed -i "s#^datadir=.*#datadir=${new_datadirectory_path}#I" $mysql_configuration_file
     exit_on_error "Could not update the Mysql Configuration file at '${mysql_configuration_file}'!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${subject}" $admin_email_address
 
+    # update the systemd service startup configs
+    mysqld_servicefile="/etc/systemd/system/mysqld.service"
+    sudo sed -i "s#--datadir=.\\S*#--datadir=${new_datadirectory_path}#I" $mysql_servicefile
+    exit_on_error "Could not update the systemd Mysqld Service configuration file at at '${mysql_servicefile}'!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${subject}" $admin_email_address
+
     ###################################
     #4. Configure Apparmor
     # Instead of using symlink (which has been problematic), we will leverage apparmor to handle the aliasing of the data directory path
@@ -1184,9 +1186,7 @@ move_mysql_datadirectory()
 
     ###################################
     #5. Restart the server
-    # There seems to be an issue with this approach where a restart after this re-configuration doesn't take effect
-    force_services_restart=1
-    start_mysql $mysql_server_port $force_services_restart
+    start_mysql $mysql_server_port
     exit_on_error "Could not start mysql server after moving its data directory on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${subject}" $admin_email_address
 }
 
