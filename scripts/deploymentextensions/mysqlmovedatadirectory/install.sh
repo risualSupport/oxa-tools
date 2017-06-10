@@ -140,22 +140,23 @@ sync_repo $repo_url $oxa_tools_public_github_projectbranch $oxa_tools_repository
 if [[ $remote_mode == 0 ]];
 then
     # at this point, we are on the jumpbox attempting to execute the installer on the remote target 
+    log "Copying scripts to target server '$target_server_ip'"
 
     # copy the installer & the utilities files to the target server & ssh/execute the Operations
-    scp ./install.sh "${os_admin_user}@${target_server_ip}":~/
+    scp  -o "StrictHostKeyChecking=no" "${current_path}/install.sh" $os_admin_user@$target_server_ip:~/
     exit_on_error "Unable to copy installer script to '${target_server}' from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
-    scp ./utilities.sh "${os_admin_user}@${target_server_ip}":~/
+    scp -o "StrictHostKeyChecking=no" "${current_path}/utilities.sh" $os_admin_user@$target_server_ip:~/
     exit_on_error "Unable to copy utilities to '${target_server}' from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
     # build the command for remote execution
     $encoded_server_list=`echo ${mysql_server_list} | base64`
-    remote_command="sudo bash ~/install.sh --oxatools-public-github-accountname $oxa_tools_public_github_account --oxatools-public-github-projectname $oxa_tools_public_github_projectname --oxatools-public-github-projectbranch $oxa_tools_public_github_projectbranch --oxatools-public-github-branchtag $oxa_tools_public_github_branchtag --oxatools-repository-path $oxa_tools_repository_path --admin-email-address $admin_email_address --target-datadirectory-path $target_datadirectory_path --mysql-server-port $mysql_server_port --mysql-admin-username $mysql_admin_username --mysql-admin-password $mysql_admin_password --target-server-ip $target_server_ip  --remote"
+    remote_command="su -c ""bash ~/install.sh --oxatools-public-github-accountname $oxa_tools_public_github_account --oxatools-public-github-projectname $oxa_tools_public_github_projectname --oxatools-public-github-projectbranch $oxa_tools_public_github_projectbranch --oxatools-public-github-branchtag $oxa_tools_public_github_branchtag --oxatools-repository-path $oxa_tools_repository_path --admin-email-address $admin_email_address --target-datadirectory-path $target_datadirectory_path --mysql-server-port $mysql_server_port --mysql-admin-username $mysql_admin_username --mysql-admin-password $mysql_admin_password --target-server-ip $target_server_ip  --remote"" root "
 
     # run the remote command
     log "Executing '${remote_command}' against ${target_server_ip}"
 
-    ssh "${os_admin_user}@${target_server_ip}" "${remote_command}"
+    ssh -o "StrictHostKeyChecking=no" "${os_admin_user}@${target_server_ip}" "${remote_command}"
     exit_on_error "Could not execute the installer on the remote target: ${target_server_ip} from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
     log "Completed Remote execution successfully"
@@ -167,10 +168,10 @@ fi
 # this should run on the target server
 #############################################
 
-log "Starting main execution"
+log "Starting main execution (remote exection mode)"
 
 # run the move operation
-move_mysql_datadirectory "${target_datadirectory_path}" "${admin_email_address}" "${mysql_admin_username}" "${mysql_admin_password}" "${target_server_ip}"
-exit_on_error "Unable move the data directory for '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $notification_email_subject $admin_email_address
+move_mysql_datadirectory "${target_datadirectory_path}" "${admin_email_address}" "${mysql_admin_username}" "${mysql_admin_password}" "${target_server_ip}" "${mysql_server_port}"
+exit_on_error "Unable move the data directory for '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${notification_email_subject}" $admin_email_address
 
-log "Completed HA Proxy installation ${target_user}"
+log "Completed move of mysql data directory on '${target_server_ip}' successfully."

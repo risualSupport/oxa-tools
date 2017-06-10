@@ -512,7 +512,7 @@ send_notification()
     # if for some reason, mail isn't already installed, just go quietly
     if ! type "mail" > /dev/null 2>&1; then
         log "Mail not installed"
-        exit 0;
+        return
     fi
 
     if [ "$#" -ge 3 ]; 
@@ -1022,10 +1022,13 @@ start_mysql()
     # the server port: default to 3306
     mysql_port=${1:-3306}
 
+    # support cases requiring service restart despite the OS version
+    force_services_restart=${1:-0}
+
     # track the OS version
     os_version=$(lsb_release -rs)
 
-    if (( $(echo "$os_version > 16" | bc -l) ))
+    if [[ $(echo "$os_version > 16" | bc -l) ]] && [[ $force_services_restart == 0]]
     then
         systemctl start mysqld
 
@@ -1079,14 +1082,14 @@ move_mysql_datadirectory()
     mysql_adminuser_name=$3
     mysql_adminuser_password=$4
     mysql_server_ip=$5
-    mysql_package_version=$6
+    mysql_server_port=$6
 
     # subject for email notification
     subject="Operation: Moving Mysql Data Directory"
 
     # get the current data directory (as the server sees it)
     current_datadirectory_path=`mysql -u ${mysql_adminuser_name} -p${mysql_adminuser_password} -N -h ${mysql_server_ip} -e "select @@datadir;"`
-    exit_on_error "Could not query the mysql server at on '${mysql_adminuser_name}@${mysql_server_ip}' to determine its current data directory!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+    exit_on_error "Could not query the mysql server at on '${mysql_adminuser_name}@${mysql_server_ip}' to determine its current data directory!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${subject}" $admin_email_address
 
     # remove trailing slash (if present)
     current_datadirectory_path=${current_datadirectory_path%/}
@@ -1102,21 +1105,31 @@ move_mysql_datadirectory()
     # 1. Stop the server
     # It is assumed that the server is already running as a slave vs a master node
     stop_mysql
-    exit_on_error "Could not stop mysql on '${HOSTNAME}'!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+    exit_on_error "Could not stop mysql on '${HOSTNAME}'!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${subject}" $admin_email_address
 
     ###################################
     # 2. Copy the server data to the new location and move the server data to backup
-    # The expectation is that the parent directory exists at the target path.
+    # there are very restrictive permissions on the data directory (we need super user access)
+
+    # The expectation is that the parent directory exists at the target path. Make sure of that
+    new_datadirectory_basepath=`dirname $new_datadirectory_path`
+    if [[ ! -d $new_datadirectory_basepath ]]; 
+    then
+        log "Creating the base path at '${new_datadirectory_basepath}' since it doesn't already exist"
+        mkdir -p "${new_datadirectory_basepath}"
+    fi
+
     log "Copying the data directory from '${current_datadirectory_path}' to '${new_datadirectory_path}'"
-    rsync -av $current_datadirectory_path $new_datadirectory_path
-    exit_on_error "Failed copying server data from '${current_datadirectory_path}' to '${new_datadirectory_path}' on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+
+    rsync -av $current_datadirectory_path $new_datadirectory_basepath
+    exit_on_error "Failed copying server data from '${current_datadirectory_path}' to '${new_datadirectory_path}' on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${subject}" $admin_email_address
 
     # Backup the current data directory
     datadirectory_backup_path="${current_datadirectory_path}-backup"
     log "Backing up the data directory from '${current_datadirectory_path}' to '${datadirectory_backup_path}'"
 
     mv $current_datadirectory_path $datadirectory_backup_path
-    exit_on_error "Could not backup the data directory from '${current_datadirectory_path}' to '${datadirectory_backup_path}' on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+    exit_on_error "Could not backup the data directory from '${current_datadirectory_path}' to '${datadirectory_backup_path}' on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${subject}" $admin_email_address
 
     ###################################
     # 3. Update mysql configuration to reference the new path
@@ -1132,7 +1145,7 @@ move_mysql_datadirectory()
     fi
 
     sed -i "s#^datadir=.*#datadir=${new_datadirectory_path}#I" $mysql_configuration_file
-    exit_on_error "Could not update the Mysql Configuration file at '${mysql_configuration_file}'!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+    exit_on_error "Could not update the Mysql Configuration file at '${mysql_configuration_file}'!" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${subject}" $admin_email_address
 
     ###################################
     #4. Configure Apparmor
@@ -1164,15 +1177,17 @@ move_mysql_datadirectory()
     fi
 
     # check for errors
-    exit_on_error "Could not start apparmor after adding the data directory alias on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+    exit_on_error "Could not start apparmor after adding the data directory alias on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${subject}" $admin_email_address
 
     # setup blank reference for mysql database directory to circumvent any startup check failures
     mkdir "${current_datadirectory_path}/mysql" -p
 
     ###################################
     #5. Restart the server
-    start_mysql
-    exit_on_error "Could not start mysql server after moving its data directory on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED, $subject $admin_email_address
+    # There seems to be an issue with this approach where a restart after this re-configuration doesn't take effect
+    force_services_restart=1
+    start_mysql $mysql_server_port $force_services_restart
+    exit_on_error "Could not start mysql server after moving its data directory on '${HOSTNAME}' !" $ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED "${subject}" $admin_email_address
 }
 
 #############################################################################
