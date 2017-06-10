@@ -153,6 +153,8 @@ then
     remote_command="sudo bash ~/install.sh --oxatools-public-github-accountname $oxa_tools_public_github_account --oxatools-public-github-projectname $oxa_tools_public_github_projectname --oxatools-public-github-projectbranch $oxa_tools_public_github_projectbranch --oxatools-public-github-branchtag $oxa_tools_public_github_branchtag --oxatools-repository-path $oxa_tools_repository_path --admin-email-address $admin_email_address --target-datadirectory-path $target_datadirectory_path --mysql-server-port $mysql_server_port --mysql-admin-username $mysql_admin_username --mysql-admin-password $mysql_admin_password --target-server-ip $target_server_ip  --remote"
 
     # run the remote command
+    log "Executing '${remote_command}' against ${target_server_ip}"
+
     ssh "${os_admin_user}@${target_server_ip}" "${remote_command}"
     exit_on_error "Could not execute the installer on the remote target: ${target_server_ip} from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
 
@@ -164,6 +166,8 @@ fi
 # Main Operations
 # this should run on the target server
 #############################################
+
+log "Starting main execution"
 
 # run the move operation
 move_mysql_datadirectory "${target_datadirectory_path}" "${admin_email_address}" "${mysql_admin_username}" "${mysql_admin_password}" "${target_server_ip}"
