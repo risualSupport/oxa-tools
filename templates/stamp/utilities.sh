@@ -19,6 +19,9 @@ ERROR_AZURECLI_SCRIPT_DOWNLOAD_FAILED=6202
 ERROR_AZURECLI2_INSTALLATION_FAILED=6203
 ERROR_AZURECLI_INVALID_OSVERSION=6204
 ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED=7001
+EROR_REPLICATION_MASTER_MISSING=7201
+ERROR_HAPROXY_INSTALLER_FAILED=7201
+ERROR_XINETD_INSTALLER_FAILED=7301
 
 #############################################################################
 # Log a message
@@ -126,7 +129,7 @@ install-git()
         apt-get update
 
         apt-get install -y git
-        exit_on_error "Failed to install the GIT clienton ${HOSTNAME} !" $ERROR_GITINSTALL_FAILED
+        exit_on_error "Failed to install the GIT client on ${HOSTNAME} !" $ERROR_GITINSTALL_FAILED
     fi
 
     log "Git client installed"
@@ -1063,6 +1066,136 @@ restart_mysql()
     start_mysql ${1:-3306}
 }
 
+# determine the next position in a list of servers with support for circular reference
+get_next_position()
+{
+    current_position=$1
+    maximum_position=$2
+
+    next_position=$((current_position+1))
+
+    if [ "$next_position" -ge "$maximum_position" ];
+    then
+        # loop
+        next_position=0
+    fi
+
+    echo $next_position
+}
+
+# Using a replication status file (generated from mysqlrepladmin), determine if a server is a valid master
+# Note: the replication status file shows the health of replication from the perspective of the target server
+check_master_status()
+{
+    # get input parameters
+    target_server=$1
+    repl_status_csv_file_path=$2
+
+    # initialize other key variables
+    rows_processed=-1
+    master_identified=0
+    servers_ok=0
+
+    ########################################
+
+    # Iterate the rows of the replication status
+    # expected header: host,port,role,state,gtid_mode,health
+    while IFS=, read host port role state gtid_mode health
+    do
+        # increment the processed rows 
+        ((rows_processed++))
+
+        # the csv file has a header. Skip it
+        if [[ $rows_processed == 0 ]];
+        then
+            continue
+        fi
+
+        # assess the server replication status
+        # we expect state=up, gtid_mode=on, health=ok for all members & role=master when host==target_server
+        if [[ "${state,,}" == "up" ]] && [[ "${gtid_mode,,}" == "on" ]] && [[ "${health,,}"=="ok" ]];
+        then
+            # track the number of server in a valid state
+            ((servers_ok++))
+        fi
+
+        # check if the target server is in master mode (expected | defensive)
+        if [[ "${host,,}" == $target_server ]] &&  [[ "${role,,}" == "master" ]];
+        then
+            master_identified=1
+        fi
+
+    done < $repl_status_csv_file_path
+
+    # Make assessment whether or not the server is a valid master
+    if [[ $servers_ok -eq $rows_processed ]] && [[ $master_identified -eq 1 ]];
+    then
+        # valid master
+        echo 1
+    else
+        # not currently master
+        echo 0
+    fi
+}
+
+# check if the target server is a valid master
+is_master_server()
+{
+    encoded_replicated_servers_list=$1  # ip address of the servers participating in the replication
+    local_server_ip=$2                  # get the server ip
+    mysql_admin_user=$3                 # admin mysql user 
+    mysql_admin_user_password=$4        # admin mysql user password
+
+    # initialize other key variables
+    replicated_servers_list=(`echo ${encoded_replicated_servers_list} | base64 --decode`)
+    total_servers=${#replicated_servers_list[@]}
+    server_position=0
+
+    for replicated_server in "${replicated_servers_list[@]}"
+    do
+        if [[ $replicated_server == $local_server_ip ]];
+        then
+            local_server_replicated_position=$server_position
+            break
+        fi
+
+        ((server_position++))
+    done
+
+    if [[ -z $local_server_replicated_position ]];
+    then
+        log "Could not locate the IP address of ${HOSTNAME} (${local_server_ip}) in the configured replication topology ${replicated_servers_list}"
+        exit $REPLICATION_MASTER_MISSING
+    fi
+
+    # identify the positions of the other servers participating in the replication topology
+    second_server_position=`get_next_position $server_position $total_servers`
+    second_server=${replicated_servers_list[$second_server_position]}
+
+    third_server_position=`get_next_position $second_server_position $total_servers`
+    third_server=${replicated_servers_list[$third_server_position]}
+
+    # more defensive: the repladmin will override the file/or create a new file
+    replication_status_file="/tmp/replication_status_$server.csv"
+    if [[ -f $replication_status_file ]];
+    then
+        #log "Cleaning up existing replication file"
+        rm $replication_status_file
+    fi
+
+    # run the repl admin to check the replication status from the perspective of the target server
+    mysqlrpladmin --master=${mysql_admin_user}:${mysql_admin_user_password}@${local_server_ip}:$mysql_server_port --slaves=${mysql_admin_user}:${mysql_admin_user_password}@${second_server}:3306,${mysql_admin_user}:${mysql_admin_user_password}@${third_server}:3306 health --format=csv > $replication_status_file
+
+    # clean up the status file (remove comment lines and warning text)
+    sed -i "/^#/ d" $replication_status_file
+    sed -i "/^WARNING/ d" $replication_status_file
+
+    # assess the replication status
+    is_valid_master=`check_master_status ${local_server_ip} ${replication_status_file}`
+
+    echo $is_valid_master
+}
+
 #############################################################################
 # Mysql Data Directory Move Operation
 #############################################################################
@@ -1217,5 +1350,48 @@ install-tools()
             log "Installing Mysql Utilities on Jumpbox ${HOSTNAME}"
             install-mysql-utilities
         fi
+    fi
+}
+
+#############################################################################
+# Install Xinet (Extended Internet) Service
+#############################################################################
+
+install-xinetd()
+{
+    if type xinetd >/dev/null 2>&1; then
+        log "xinet is already installed"
+    else
+        log "Installing Xinet service"
+
+        log "Updating Repository"
+        apt-get update
+
+        apt-get install -y xinetd
+        exit_on_error "Failed to install xinet service on ${HOSTNAME} !" $ERROR_XINETD_INSTALLER_FAILED
+    fi
+
+    log "Xinet service installed"
+}
+
+#############################################################################
+# Xinet Service Controls
+#############################################################################
+
+restart_xinetd()
+{
+    # restart the service
+    /etc/init.d/xinetd restart
+
+    # the server is lightweight. A brief pause may be necessary.
+    sleep 5s
+
+    # make sure it is running
+    xinetd_pid=`ps -ef | grep '/usr/sbin/xinetd' | grep -v grep | awk '{print $2}'`
+
+    if [ ! -z "$xinetd_pid" ]; 
+    then
+        log "Unable to start xinet"
+        exit $ERROR_XINETD_INSTALLER_FAILED
     fi
 }
