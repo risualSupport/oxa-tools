@@ -22,6 +22,7 @@ ERROR_MYSQL_DATADIRECTORY_MOVE_FAILED=7001
 EROR_REPLICATION_MASTER_MISSING=7201
 ERROR_HAPROXY_INSTALLER_FAILED=7201
 ERROR_XINETD_INSTALLER_FAILED=7301
+ERROR_TOOLS_INSTALLER_FAIL=7401
 
 #############################################################################
 # Log a message
@@ -1394,4 +1395,24 @@ restart_xinetd()
         log "Unable to start xinet"
         exit $ERROR_XINETD_INSTALLER_FAILED
     fi
+}
+
+#############################################################################
+# Deployment Support
+#############################################################################
+
+copy_bits()
+{
+    bitscopy_target_server=$1
+    script_base_path=$2
+    error_code=$3
+    copyerror_mail_subject=$4
+    copyerror_mail_receiver=$5
+
+    # copy the installer & the utilities files to the target server & ssh/execute the Operations
+    scp $script_base_path/install.sh "${bitscopy_target_server}":~/
+    exit_on_error "Unable to copy installer script to '${bitscopy_target_server}' from '${HOSTNAME}' !" $error_code, $copyerror_mail_subject $copyerror_mail_receiver
+
+    scp $script_base_path/utilities.sh "${bitscopy_target_server}":~/
+    exit_on_error "Unable to copy utilities to '${bitscopy_target_server}' from '${HOSTNAME}' !" $error_code, $copyerror_mail_subject $copyerror_mail_receiver
 }

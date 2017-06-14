@@ -145,21 +145,6 @@ parse_args()
     done
 }
 
-
-copy_bits()
-{
-
-    bitscopy_target_server=$1
-
-    # copy the installer & the utilities files to the target server & ssh/execute the Operations
-    scp $current_path/install.sh "${bitscopy_target_server}":~/
-    exit_on_error "Unable to copy installer script to '${bitscopy_target_server}' from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
-
-    scp $current_path/utilities.sh "${bitscopy_target_server}":~/
-    exit_on_error "Unable to copy utilities to '${bitscopy_target_server}' from '${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $admin_email_address
-
-}
-
 execute_remote_command()
 {
     remote_execution_server_target=$1
@@ -209,7 +194,7 @@ sync_repo $repo_url $oxa_tools_public_github_projectbranch $oxa_tools_repository
 
 
 # execute the installer remotely
-if [[ $remote == 0 ]];
+if [[ $remote_mode == 0 ]];
 then
     # at this point, we are on the jumpbox attempting to execute the installer on the remote target 
 
@@ -227,7 +212,7 @@ then
         for server in "${mysql_server_list[@]}"
         do
             # copy the bits
-            copy_bits $server
+            copy_bits $server $current_path $ERROR_HAPROXY_INSTALLER_FAILED $notification_email_subject $admin_email_address
 
             # execute the component deployment
             execute_remote_command $server
@@ -244,7 +229,7 @@ then
     log "Initiating remote installation of haproxy"
 
     # copy the installer & the utilities files to the target server & ssh/execute the Operations
-    copy_bits $target_server
+    copy_bits $target_server $current_path $ERROR_HAPROXY_INSTALLER_FAILED $notification_email_subject $admin_email_address
 
     # execute the component deployment
     execute_remote_command $server
