@@ -57,9 +57,9 @@ haproxy_configuration_template_file="${oxa_tools_repository_path}/scripts/deploy
 network_services_file="/etc/services"
 
 xinet_service_description="# Mysql Master Probe"
-xinet_service_port_regex="${probe_port}\/tcp"
+xinet_service_port_regex="${haproxy_server_probe_port}\/tcp"
 xinet_service_line_regex="^${xinet_service_name}.*${xinet_service_port_regex}.*"
-xinet_service_line="${xinet_service_name} \t ${probe_port} \t\t ${xinet_service_description}"
+xinet_service_line="${xinet_service_name} \t ${haproxy_server_probe_port} \t\t ${xinet_service_description}"
 xinet_service_name="mysqlmastercheck"
 
 probe_source_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -67,7 +67,7 @@ probe_service_configuration_template="${oxa_tools_repository_path}/scripts/deplo
 probe_script_source="${oxa_tools_repository_path}/scripts/deploymentextensions/${package_name}/${xinet_service_name}.sh"
 probe_script_installation_directory="/opt"
 probe_script="${probe_script_installation_directory}/${xinet_service_name}"
-probe_port=12010
+haproxy_server_probe_port=12010
 
 #############################################################################
 # parse the command line arguments
@@ -113,6 +113,9 @@ parse_args()
           --haproxy-server-port)
             haproxy_port="${arg_value}"
             ;;
+          --haproxy-server-probe-port)
+            haproxy_server_probe_port="${arg_value}"
+            ;;
           --mysql-server-port)
             mysql_server_port="${arg_value}"
             ;;
@@ -121,9 +124,6 @@ parse_args()
             ;;
           --mysql-admin-password)
             mysql_admin_password="${arg_value}"
-            ;;
-          --probe-port)
-            probe_port="${arg_value}"
             ;;
           --component)
             component="${arg_value}"
@@ -185,7 +185,7 @@ execute_remote_command()
     
     repository_parameters="--oxatools-public-github-accountname ${oxa_tools_public_github_account} --oxatools-public-github-projectname ${oxa_tools_public_github_projectname} --oxatools-public-github-projectbranch ${oxa_tools_public_github_projectbranch} --oxatools-public-github-branchtag ${oxa_tools_public_github_branchtag} --oxatools-repository-path ${oxa_tools_repository_path}"
     mysql_parameters="--mysql-server-port ${mysql_server_port} --mysql-admin-username ${mysql_admin_username} --mysql-admin-password ${mysql_admin_password} --haproxy-server-port ${haproxy_port} --mysql-server-list ${encoded_server_list}"
-    misc_parameters="--cluster-admin-email ${cluster_admin_email} --haproxy-server ${haproxy_server} --probe-port ${probe_port} --target-user ${target_user} --component ${component} --remote"
+    misc_parameters="--cluster-admin-email ${cluster_admin_email} --haproxy-server ${haproxy_server} --probe-port ${haproxy_server_probe_port} --target-user ${target_user} --component ${component} --remote"
 
     remote_command="sudo bash ~/install.sh ${repository_parameters} ${mysql_parameters} ${misc_parameters}"
 
@@ -327,7 +327,7 @@ then
         exit_on_error "Could not append network service configuration for the probe.' !" $ERROR_XINETD_INSTALLER_FAILED, $notification_email_subject $cluster_admin_email
     else
         # some other service is using the port
-        log "${probe_port} is in use by another service: ${existing_service_line}"
+        log "${haproxy_server_probe_port} is in use by another service: ${existing_service_line}"
         exit $ERROR_XINETD_INSTALLER_FAILED
     fi
 
@@ -338,7 +338,7 @@ then
     cp "${probe_source_dir}/service_configuration.template" $xinetd_service_configuration_file
     exit_on_error "Could not copy the service configuration to '${xinetd_service_configuration_file}' on ${HOSTNAME}' !" $ERROR_HAPROXY_INSTALLER_FAILED, $notification_email_subject $cluster_admin_email
 
-    sed -i "s/{service_port}/${probe_port}/I" $xinetd_service_configuration_file
+    sed -i "s/{service_port}/${haproxy_server_probe_port}/I" $xinetd_service_configuration_file
     sed -i "s/{target_user}/${target_user}/I" $xinetd_service_configuration_file
     sed -i "s/{script_path}/${probe_script}/I" $xinetd_service_configuration_file
 
@@ -403,7 +403,7 @@ haproxy_server_ip=`ifconfig | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.
 
 sed -i "s/{HAProxyIpAddress}/${haproxy_server_ip}/I" "${haproxy_configuration_file}"
 sed -i "s/{HAProxyPort}/${haproxy_port}/I" "${haproxy_configuration_file}"
-sed -i "s/{ProbePort}/${probe_port}/I" "${haproxy_configuration_file}"
+sed -i "s/{ProbePort}/${haproxy_server_probe_port}/I" "${haproxy_configuration_file}"
 sed -i "s/{MysqlServerPort}/${mysql_server_port}/I" "${haproxy_configuration_file}"
 sed -i "s/{MysqlMasterServerIP}/${mysql_master_server_ip}/I" "${haproxy_configuration_file}"
 sed -i "s/{MysqlSlave1ServerIP}/${mysql_slave1_server_ip}/I" "${haproxy_configuration_file}"
