@@ -19,6 +19,9 @@ oxa_tools_repository_path="/oxa/oxa-tools"
 notification_email_subject="Tools Installer"
 cluster_admin_email=""
 
+# this is the user account that will be used for ssh
+target_user=""
+
 # operation mode: 0=local, 1=remote via ssh
 remote_mode=0
 
@@ -75,6 +78,9 @@ parse_args()
           --backend-server-list)
             backend_server_list=(`echo ${arg_value} | base64 --decode`)
             ;;
+          --target-user)
+            target-user="${arg_value}"
+            ;;
           --remote)
             remote_mode=1
             ;;
@@ -90,9 +96,15 @@ parse_args()
     done
 }
 
+validate_args()
+{
+    #TODO: check for missing parameters
+
+}
 execute_remote_command()
 {
     remote_execution_server_target=$1
+    remote_execution_target_user=$2
 
     # build the command for remote execution (basically: pass through all existing parameters)
     $encoded_server_list=`echo ${backend_server_list} | base64`
@@ -104,7 +116,7 @@ execute_remote_command()
     remote_command="sudo bash ~/install.sh ${repository_parameters} ${mysql_parameters} ${misc_parameters}"
 
     # run the remote command
-    ssh "${remote_execution_server_target}" $remote_command
+    ssh "${remote_execution_target_user}@${remote_execution_server_target}" $remote_command
     exit_on_error "Could not execute the tools installer on the remote target: ${remote_execution_server_target} from '${HOSTNAME}' !" $ERROR_TOOLS_INSTALLER_FAIL, $notification_email_subject $admin_email_address
 }
 
@@ -132,6 +144,7 @@ print_script_header "Tools Installer"
 
 # pass existing command line arguments
 parse_args $@
+validate_args
 
 # sync the oxa-tools repository
 repo_url=`get_github_url "$oxa_tools_public_github_account" "$oxa_tools_public_github_projectname"`
@@ -149,10 +162,10 @@ then
     for server in "${backend_server_list[@]}"
     do
         # copy the bits
-        copy_bits $server $current_path $ERROR_TOOLS_INSTALLER_FAIL $notification_email_subject $cluster_admin_email
+        copy_bits $server $target_user $current_path $ERROR_TOOLS_INSTALLER_FAIL $notification_email_subject $cluster_admin_email
 
         # execute the component deployment
-        execute_remote_command $server
+        execute_remote_command $server $target_user
     done
 fi
 
