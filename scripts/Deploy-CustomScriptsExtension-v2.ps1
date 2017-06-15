@@ -160,24 +160,33 @@ foreach($parameter in $upgradeParameters)
         throw "'$($parameter)' is invalid. It is expected to be a hashtable with the following keys: name, value (optional: defaults to blank), valueType (optional: defaults to string)"
     }
 
-    if ($parameterHashtable.ContainsKey("valueType") -and $parameterHashtable["valueType"] -ieq "File")
+    if ($parameterHashtable.ContainsKey("valueType") -and ($parameterHashtable["valueType"] -ieq "File" -or $parameterHashtable["valueType"] -ieq "Base64") )
     {
-        # we have a filetype specified. Make sure the "value" is present & that it points to a file
-        if ($parameterHashtable.ContainsKey("value") -eq $false)
-        {
-            throw "No value specified for the FileType parameter: '$($parameterHashtable["name"])'"
-        }
-
-        # test the file path
-        if ((Test-Path -Path ($parameterHashtable["value"])) -eq $false )
-        {
-            throw "The file specified '$($parameterHashtable["value"])' doesn't exist!"
-        }
-
         # get the file content and base64 encode it
-        $fileContent = gc -Path $parameterHashtable["value"]
-        $fileContentBytes = [System.Text.Encoding]::UTF8.GetBytes($fileContent)
-        $parameterValue = [Convert]::ToBase64String($fileContentBytes)
+        if ($parameterHashtable["valueType"] -ieq "File")
+        {
+            # we have a filetype specified. Make sure the "value" is present & that it points to a file
+            if ($parameterHashtable.ContainsKey("value") -eq $false)
+            {
+                throw "No value specified for the FileType parameter: '$($parameterHashtable["name"])'"
+            }
+
+            # test the file path
+            if ((Test-Path -Path ($parameterHashtable["value"])) -eq $false )
+            {
+                throw "The file specified '$($parameterHashtable["value"])' doesn't exist!"
+            }
+        
+            $contentToEncode = gc -Path $parameterHashtable["value"]
+        }
+        else
+        {
+            Log-Message "Encoding $($parameterHashtable["name"])"
+            $contentToEncode = $parameterHashtable["value"]
+        }
+        
+        $contentToEncodeBytes = [System.Text.Encoding]::UTF8.GetBytes($contentToEncode)
+        $parameterValue = [Convert]::ToBase64String($contentToEncodeBytes)
     }
     else
     {
@@ -188,12 +197,6 @@ foreach($parameter in $upgradeParameters)
     # append the parameter to the list
     $upgradeParameterList += "--$($parameterHashtable["name"]) ""$($parameterValue)"""
 }
-
-# add the oxa-tools repository parameters to the list as well to expose these values to the underlying script
-$upgradeParameterList += "--oxatools-public-github-accountname ""$($OxaToolsGithubAccountName)"""
-$upgradeParameterList += "--oxatools-public-github-projectname ""$($OxaToolsGithubProjectName)"""
-$upgradeParameterList += "--oxatools-public-github-projectbranch ""$($OxaToolsGithubBranch)"""
-$upgradeParameterList += "--oxatools-public-github-branchtag ""$($OxaToolsGithubBranchTag)"""
 
 # prepare the upgrade parameters for handling in the scripts
 $upgradeParameterListBytes = [System.Text.Encoding]::UTF8.GetBytes($upgradeParameterList -join " ")
