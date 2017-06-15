@@ -25,6 +25,9 @@ target_user=""
 # operation mode: 0=local, 1=remote via ssh
 remote_mode=0
 
+# debug mode: 0=set +x, 1=set -x
+debug_mode=0
+
 #############################################################################
 # parse the command line arguments
 
@@ -84,6 +87,10 @@ parse_args()
           --remote)
             remote_mode=1
             ;;
+          --debug)
+            debug_mode=1
+            ;;
+
         esac
 
         shift # past argument or value
@@ -102,6 +109,21 @@ validate_args()
     #TODO: check for missing parameters
     log "Validating arguments"
 
+    # ssh user
+    if [[ -z $target_user ]]; 
+    then
+        log "You must specify a user account to use for SSH to remote servers"
+        exit $ERROR_TOOLS_INSTALLER_FAIL
+    fi
+
+    # SMTP validation
+    if [[ -z $smtp_server ]] || [[ -z smtp_server_port ]] || [[ -z $smtp_auth_user ]] || [[ -z smtp_auth_user_password ]] || [[ -z cluster_admin_email ]];
+    then
+        log "Invalid SMTP parameters. You must specify the smtp server, port, authentication user, authentication user password and a cluster administrator email"
+        exit $ERROR_TOOLS_INSTALLER_FAIL
+    fi
+
+    log "Completed argument validation successfully"
 }
 
 execute_remote_command()
@@ -149,6 +171,12 @@ print_script_header "Tools Installer"
 parse_args $@
 validate_args
 
+# debug mode support
+if [[ $debug_mode == 1 ]];
+then
+    set -x
+fi
+
 # sync the oxa-tools repository
 repo_url=`get_github_url "$oxa_tools_public_github_account" "$oxa_tools_public_github_projectname"`
 sync_repo $repo_url $oxa_tools_public_github_projectbranch $oxa_tools_repository_path $access_token $oxa_tools_public_github_branchtag
@@ -156,8 +184,6 @@ sync_repo $repo_url $oxa_tools_public_github_projectbranch $oxa_tools_repository
 ####################################
 # Main Operations
 ####################################
-
-set -x 
 
 if [[ $remote_mode == 0 ]];
 then
