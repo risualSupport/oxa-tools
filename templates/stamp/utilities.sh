@@ -456,6 +456,8 @@ sync_repo()
         echo "sync_repo: invalid number of arguments" && exit 1
     fi
   
+    log "Syncing the '${repo_url}' repository (Branch='${repo_version}', Tag='${repo_tag}' "
+
     if [[ ! -d $repo_path ]]; then
         sudo mkdir -p $repo_path
         # todo: we should prevent adding repo_token more than once. One option is to use get_github_url()
