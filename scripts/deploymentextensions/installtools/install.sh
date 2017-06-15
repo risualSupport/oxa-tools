@@ -4,7 +4,8 @@
 # Licensed under the MIT license. See LICENSE file on the project webpage for details.
 
 #
-# This script installs various tools for the Jumpbox & VMSS instances.
+# This script installs various tools for the Jumpbox & Backend instances. 
+# It also installs a mailer capability to allow the target servers to send emails.
 #
 
 # Oxa Tools
@@ -63,6 +64,9 @@ parse_args()
           --oxatools-repository-path)
             oxa_tools_repository_path="${arg_value}"
             ;;
+          --cluster-admin-email)
+            cluster_admin_email="${arg_value}"
+            ;;
           --smtp-server)
             smtp_server="${arg_value}"
             ;;
@@ -74,9 +78,6 @@ parse_args()
             ;;
           --smtp-auth-user-password)
             smtp_auth_user_password="${arg_value}"
-            ;;
-          --cluster-admin-email)
-            cluster_admin_email="${arg_value}"
             ;;
           --backend-server-list)
             backend_server_list=(`echo ${arg_value} | base64 --decode`)
@@ -90,7 +91,6 @@ parse_args()
           --debug)
             debug_mode=1
             ;;
-
         esac
 
         shift # past argument or value
@@ -109,7 +109,7 @@ validate_args()
     #TODO: check for missing parameters
     log "Validating arguments"
 
-    # ssh user
+    # target user
     if [[ -z $target_user ]]; 
     then
         log "You must specify a user account to use for SSH to remote servers"
@@ -142,7 +142,7 @@ execute_remote_command()
 
     # run the remote command
     ssh "${remote_execution_target_user}@${remote_execution_server_target}" $remote_command
-    exit_on_error "Could not execute the tools installer on the remote target: ${remote_execution_server_target} from '${HOSTNAME}' !" $ERROR_TOOLS_INSTALLER_FAIL, $notification_email_subject $admin_email_address
+    exit_on_error "Could not execute the tools installer on the remote target: ${remote_execution_server_target} from '${HOSTNAME}' !" $ERROR_TOOLS_INSTALLER_FAIL, $notification_email_subject $cluster_admin_email
 }
 
 ###############################################
@@ -165,7 +165,7 @@ fi
 source $utilities_path
 
 # Script self-identification
-print_script_header "Tools Installer"
+print_script_header $notification_email_subject
 
 # pass existing command line arguments
 parse_args $@
