@@ -208,4 +208,4 @@ install-tools
 # install mailer
 install-mailer "${smtp_server}" "${smtp_server_port}" "${smtp_auth_user}" "${smtp_auth_user_password}" "${cluster_admin_email}"
 
-log "Completed tools installation for ${HOSTNAME} \n"
+log "Completed tools installation for ${HOSTNAME}"
