@@ -1413,7 +1413,7 @@ copy_bits()
     copyerror_mail_receiver=$6
 
     # copy the installer & the utilities files to the target server & ssh/execute the Operations
-    scp $script_base_path/install.sh "${bitscopy_target_server}":~/
+    scp $script_base_path/install.sh "${bitscopy_target_user}@${bitscopy_target_server}":~/
     exit_on_error "Unable to copy installer script to '${bitscopy_target_server}' from '${HOSTNAME}' !" $error_code, $copyerror_mail_subject $copyerror_mail_receiver
 
     scp $script_base_path/utilities.sh "${bitscopy_target_user}@${bitscopy_target_server}":~/
