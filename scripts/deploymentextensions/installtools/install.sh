@@ -98,7 +98,10 @@ parse_args()
 
 validate_args()
 {
+
     #TODO: check for missing parameters
+    log "Validating arguments"
+
 }
 
 execute_remote_command()
