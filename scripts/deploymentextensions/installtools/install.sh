@@ -79,7 +79,7 @@ parse_args()
             backend_server_list=(`echo ${arg_value} | base64 --decode`)
             ;;
           --target-user)
-            target-user="${arg_value}"
+            target_user="${arg_value}"
             ;;
           --remote)
             remote_mode=1
@@ -156,6 +156,8 @@ sync_repo $repo_url $oxa_tools_public_github_projectbranch $oxa_tools_repository
 ####################################
 # Main Operations
 ####################################
+
+set -x 
 
 if [[ $remote_mode == 0 ]];
 then
