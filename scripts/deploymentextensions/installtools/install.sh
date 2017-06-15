@@ -99,8 +99,8 @@ parse_args()
 validate_args()
 {
     #TODO: check for missing parameters
-
 }
+
 execute_remote_command()
 {
     remote_execution_server_target=$1
