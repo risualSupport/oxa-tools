@@ -46,7 +46,7 @@ parse_args()
         fi
 
          # Log input parameters to facilitate troubleshooting
-        echo "Option '${1}' set with value '"${arg_value}"'"
+        log "Option '${1}' set with value '"${arg_value}"'"
 
         case "$1" in
           --oxatools-public-github-accountname)
