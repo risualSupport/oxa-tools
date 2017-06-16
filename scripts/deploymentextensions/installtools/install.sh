@@ -134,9 +134,9 @@ execute_remote_command()
     # build the command for remote execution (basically: pass through all existing parameters)
     encoded_server_list=`echo ${backend_server_list} | base64`
     
-    repository_parameters="--oxatools-public-github-accountname ${oxa_tools_public_github_account} --oxatools-public-github-projectname ${oxa_tools_public_github_projectname} --oxatools-public-github-projectbranch ${oxa_tools_public_github_projectbranch} --oxatools-public-github-branchtag ${oxa_tools_public_github_branchtag} --oxatools-repository-path ${oxa_tools_repository_path}"
-    smtp_parameters="--smtp-server ${smtp_server} --smtp-server-port ${smtp_server_port} --smtp-auth-user ${smtp_auth_user} --smtp-auth-user-password ${smtp_auth_user_password}"
-    misc_parameters="--cluster-admin-email ${cluster_admin_email} --backend-server-list ${encoded_server_list} --remote"
+    repository_parameters="--oxatools-public-github-accountname ""${oxa_tools_public_github_account}"" --oxatools-public-github-projectname ""${oxa_tools_public_github_projectname}"" --oxatools-public-github-projectbranch ""${oxa_tools_public_github_projectbranch}"" --oxatools-public-github-branchtag ""${oxa_tools_public_github_branchtag}"" --oxatools-repository-path ""${oxa_tools_repository_path}"""
+    smtp_parameters="--smtp-server ""${smtp_server}"" --smtp-server-port ""${smtp_server_port}"" --smtp-auth-user ""${smtp_auth_user}"" --smtp-auth-user-password ""${smtp_auth_user_password}"""
+    misc_parameters="--cluster-admin-email ""${cluster_admin_email}"" --backend-server-list ""${encoded_server_list}"" --remote"
 
     remote_command="sudo bash ~/install.sh ${repository_parameters} ${smtp_parameters} ${misc_parameters}"
 
