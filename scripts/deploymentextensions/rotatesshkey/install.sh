@@ -7,6 +7,14 @@
 # This script rotates the SSH key for the target user on the jumpbox.
 #
 
+# Oxa Tools
+# Settings for the OXA-Tools public repository 
+oxa_tools_public_github_account="Microsoft"
+oxa_tools_public_github_projectname="oxa-tools"
+oxa_tools_public_github_projectbranch="oxa/master.fic"
+oxa_tools_public_github_branchtag=""
+oxa_tools_repository_path="/oxa/oxa-tools"
+
 # Email Notifications
 notification_email_subject="Rotate SSH Key Installer"
 cluster_admin_email=""
