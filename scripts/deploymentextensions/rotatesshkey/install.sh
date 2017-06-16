@@ -98,7 +98,7 @@ validate_args()
     # only add the new public key as the only authorized key for the specific user
     authorized_keys_path="/home/${target_user}/.ssh/authorized_keys"
 
-    if [[ -f $authorized_keys_path ]];
+    if [[ ! -f $authorized_keys_path ]];
     then
         log "The target user's authorized keys doesn't already exist."
         exit $ERROR_SSHKEYROTATION_INSTALLER_FAILED
