@@ -180,6 +180,7 @@ fi
 # sync the oxa-tools repository
 repo_url=`get_github_url "$oxa_tools_public_github_account" "$oxa_tools_public_github_projectname"`
 sync_repo $repo_url $oxa_tools_public_github_projectbranch $oxa_tools_repository_path $access_token $oxa_tools_public_github_branchtag
+log "Repository sync is complete" " " 2
 
 ####################################
 # Main Operations
@@ -208,4 +209,4 @@ install-tools
 # install mailer
 install-mailer "${smtp_server}" "${smtp_server_port}" "${smtp_auth_user}" "${smtp_auth_user_password}" "${cluster_admin_email}"
 
-log "Completed tools installation for ${HOSTNAME}"
+log "Completed tools installation for ${HOSTNAME}" " " 2

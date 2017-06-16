@@ -37,6 +37,12 @@ log()
     # $2 - flag for error message = 1 (only presence test)
     # $3 - extra line
     
+    # sometimes it is necessary to prepend an extra line
+    if [[ ! -z $3 ]] && ( [[ $3 == 1]] || [[ $3 == 3]] );
+    then
+        echo " "
+    fi
+
     TIMESTAMP=`date +"%D %T"`
     
     # check if this is an error message
@@ -50,8 +56,8 @@ log()
         echo $LOG_MESSAGE
     fi
     
-    # sometimes it is necessary to add an extra line
-    if [[ ! -z $3 ]];
+    # sometimes it is necessary to append an extra line
+    if [[ ! -z $3 ]] && ( [[ $3 == 2]] || [[ $3 == 3]] );
     then
         echo " "
     fi
@@ -442,11 +448,11 @@ print_script_header()
         SCRIPT_NAME=$scriptname_override
     fi
 
-    log "-"
+    log "-" " " 1
     log "#############################################"
     log "Starting ${SCRIPT_NAME}"
     log "#############################################"
-    log "-" " " 1
+    log "-"
 }
 
 #############################################################################
