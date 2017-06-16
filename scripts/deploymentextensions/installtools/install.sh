@@ -105,22 +105,20 @@ parse_args()
 
 validate_args()
 {
-
-    #TODO: check for missing parameters
     log "Validating arguments"
 
     # target user
     if [[ -z $target_user ]]; 
     then
         log "You must specify a user account to use for SSH to remote servers"
-        exit $ERROR_TOOLS_INSTALLER_FAIL
+        exit $ERROR_TOOLS_INSTALLER_FAILED
     fi
 
     # SMTP validation
     if [[ -z $smtp_server ]] || [[ -z smtp_server_port ]] || [[ -z $smtp_auth_user ]] || [[ -z smtp_auth_user_password ]] || [[ -z cluster_admin_email ]];
     then
         log "Invalid SMTP parameters. You must specify the smtp server, port, authentication user, authentication user password and a cluster administrator email"
-        exit $ERROR_TOOLS_INSTALLER_FAIL
+        exit $ERROR_TOOLS_INSTALLER_FAILED
     fi
 
     log "Completed argument validation successfully"
@@ -142,7 +140,7 @@ execute_remote_command()
 
     # run the remote command
     ssh "${remote_execution_target_user}@${remote_execution_server_target}" $remote_command
-    exit_on_error "Could not execute the tools installer on the remote target: ${remote_execution_server_target} from '${HOSTNAME}' !" $ERROR_TOOLS_INSTALLER_FAIL, $notification_email_subject $cluster_admin_email
+    exit_on_error "Could not execute the tools installer on the remote target: ${remote_execution_server_target} from '${HOSTNAME}' !" $ERROR_TOOLS_INSTALLER_FAILED, $notification_email_subject $cluster_admin_email
 }
 
 ###############################################
@@ -194,7 +192,7 @@ then
     for server in "${backend_server_list[@]}"
     do
         # copy the bits
-        copy_bits $server $target_user $current_path $ERROR_TOOLS_INSTALLER_FAIL $notification_email_subject $cluster_admin_email
+        copy_bits $server $target_user $current_path $ERROR_TOOLS_INSTALLER_FAILED $notification_email_subject $cluster_admin_email
 
         # execute the component deployment
         execute_remote_command $server $target_user
