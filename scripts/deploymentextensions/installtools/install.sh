@@ -138,7 +138,7 @@ execute_remote_command()
     smtp_parameters="--smtp-server ${smtp_server} --smtp-server-port ${smtp_server_port} --smtp-auth-user ${smtp_auth_user} --smtp-auth-user-password ${smtp_auth_user_password}"
     misc_parameters="--cluster-admin-email ${cluster_admin_email} --backend-server-list ${encoded_server_list} --remote"
 
-    remote_command="sudo bash ~/install.sh ${repository_parameters} ${mysql_parameters} ${misc_parameters}"
+    remote_command="sudo bash ~/install.sh ${repository_parameters} ${smtp_parameters} ${misc_parameters}"
 
     # run the remote command
     ssh "${remote_execution_target_user}@${remote_execution_server_target}" $remote_command

@@ -35,6 +35,7 @@ log()
     
     # $1 - the message to log
     # $2 - flag for error message = 1 (only presence test)
+    # $3 - extra line
     
     TIMESTAMP=`date +"%D %T"`
     
@@ -49,6 +50,12 @@ log()
         echo $LOG_MESSAGE
     fi
     
+    # sometimes it is necessary to add an extra line
+    if [[ ! -z $3 ]];
+    then
+        echo " "
+    fi
+
     # send the message to syslog
     logger "$1"
 }
