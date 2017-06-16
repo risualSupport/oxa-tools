@@ -38,7 +38,7 @@ log()
     # $3 - extra line
     
     # sometimes it is necessary to prepend an extra line
-    if [[ ! -z $3 ]] && ( [[ $3 == 1]] || [[ $3 == 3]] );
+    if [[ ! -z $3 ]] && ( [[ $3 == 1 ]] || [[ $3 == 3 ]] );
     then
         echo " "
     fi
@@ -57,7 +57,7 @@ log()
     fi
     
     # sometimes it is necessary to append an extra line
-    if [[ ! -z $3 ]] && ( [[ $3 == 2]] || [[ $3 == 3]] );
+    if [[ ! -z $3 ]] && ( [[ $3 == 2 ]] || [[ $3 == 3 ]] );
     then
         echo " "
     fi
