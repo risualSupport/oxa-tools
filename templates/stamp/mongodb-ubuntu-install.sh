@@ -309,8 +309,8 @@ start_mongodb()
 
     if (( $(echo "$OS_VER > 16" | bc -l) ))
     then
+        systemctl enable mongodb    
         systemctl start mongodb
-        systemctl enable mongodb
     else
         service mongod start
     fi
