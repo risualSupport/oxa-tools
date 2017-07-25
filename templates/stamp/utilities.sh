@@ -972,7 +972,7 @@ EOF"
 
 set-server-timezone()
 {
-    timezone="America/Los_Angeles"
+    timezone="Europe/London"
 
     if [ "$#" -ge 1 ]; then
         $timezone="${1}"
