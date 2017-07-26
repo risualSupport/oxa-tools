@@ -366,10 +366,12 @@ original_str='fork: true'
 replace_str='fork: false'
 sed -i "s~$original_str~$replace_str~" /etc/mongod.conf
 
-rm /mongo/db/mongod.lock
-systemctl stop mongodb
-systemctl start mongodb
-systemctl enable mongodb
+sudo rm /mongo/db/mongod.lock
+sudo systemctl stop mongodb
+sudo systemctl start mongodb
+sudo rm /mongo/db/mongod.lock
+sudo systemctl stop mongodb
+sudo systemctl enable mongodb
 
 }
 
