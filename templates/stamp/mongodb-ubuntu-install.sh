@@ -313,7 +313,8 @@ start_mongodb()
         systemctl start mongodb
     else
         service mongod start
-    fi
+
+fi
 
     # Wait for MongoDB daemon to start and initialize for the first time (this may take up to a minute or so)
     while ! timeout 1 bash -c "echo > /dev/tcp/localhost/$MONGODB_PORT"; do sleep 10; done
@@ -354,6 +355,23 @@ configure_db_users()
     mongo cs_comments_service --host 127.0.0.1 --eval "db.dropUser('${ADMIN_USER_NAME}'); db.createUser({user: '${ADMIN_USER_NAME}', pwd: '${ADMIN_USER_PASSWORD}', roles:[{ role: 'userAdminAnyDatabase', db: 'admin' }, { role: 'clusterAdmin', db: 'admin' }, { role: 'readWriteAnyDatabase', db: 'admin' }, { role: 'dbAdminAnyDatabase', db: 'admin' } ]})"
 }
 
+risual_configure()
+{
+
+original_str='/var/run/mongodb/mongod.pid'
+replace_str='/mongo/db/mongod.pid'
+sed -i "s~$original_str~$replace_str~" /etc/mongod.conf
+
+original_str='fork: true'
+replace_str='fork: false'
+sed -i "s~$original_str~$replace_str~" /etc/mongod.conf
+
+systemctl enable mongodb
+systemctl stop mongodb
+systemctl start mongodb
+
+}
+
 # Step 1
 configure_datadisks
 
@@ -376,6 +394,9 @@ configure_db_users
 
 # Step 7
 configure_replicaset
+
+# Step 8
+risual_configure
 
 # Exit (proudly)
 exit 0
