@@ -379,23 +379,6 @@ sudo systemctl enable mongodb
 risual_sys()
 {
 systemctl enable mongodb
-{
-
-original_str='/var/run/mongodb/mongod.pid'
-replace_str='/mongo/db/mongod.pid'
-sed -i "s~$original_str~$replace_str~" /etc/mongod.conf
-
-original_str='fork: true'
-replace_str='fork: false'
-sed -i "s~$original_str~$replace_str~" /etc/mongod.conf
-
-sudo rm /mongo/db/mongod.lock
-sudo systemctl stop mongodb
-sudo systemctl start mongodb
-sudo rm /mongo/db/mongod.lock
-sudo systemctl stop mongodb
-sudo systemctl enable mongodb
-
 }
 
 # Step 1
