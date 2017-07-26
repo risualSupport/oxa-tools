@@ -160,7 +160,7 @@ install_mongodb()
     
     # Stop Mongod as it may be auto-started during the above step (which is not desirable)
     stop_mongodb
-    risual_sys
+   
 }
 
 #############################################################################
@@ -367,19 +367,8 @@ original_str='fork: true'
 replace_str='fork: false'
 sed -i "s~$original_str~$replace_str~" /etc/mongod.conf
 
-sudo rm /mongo/db/mongod.lock
-sudo systemctl stop mongodb
-sudo systemctl start mongodb
-sudo rm /mongo/db/mongod.lock
-sudo systemctl stop mongodb
-sudo systemctl enable mongodb
-
 }
 
-risual_sys()
-{
-systemctl enable mongodb
-}
 
 # Step 1
 configure_datadisks
