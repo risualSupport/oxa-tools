@@ -367,6 +367,8 @@ original_str='fork: true'
 replace_str='fork: false'
 sed -i "s~$original_str~$replace_str~" /etc/mongod.conf
 
+printf '%s\n' 'sudo rm /mongo/db/mongod.lock' 'systemctl enable mongod' 'sudo service mongod start' > /etc/init.d/mongod.sh
+reboot
 }
 
 
