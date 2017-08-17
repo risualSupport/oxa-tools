@@ -14,7 +14,7 @@ if [ "$1" == "true" ] || [ "$1" == "True" ]; then
 	cd /edx/app/edxapp
 
 	# Download comprehensive theming from github to folder /edx/app/edxapp/themes/comprehensive 
-	sudo git clone https://github.com/microsoft/edx-theme.git themes -b oxa/master.fic
+	sudo git clone https://github.com/risualSupport/edx-theme.git themes -b oxa/master.fic
 	
 	for i in `ls -d1 /edx/app/edxapp/themes/*/lms/static/images`; do
        sudo cp /oxa/oxa-tools-config/env/$2/*.png $i;
